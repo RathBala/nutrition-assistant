@@ -1,3 +1,9 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import { CheckCircle2, Loader2 } from "lucide-react";
+import Image from "next/image";
+
 import { AiRecap } from "@/components/ai-recap";
 import { MacroSummary } from "@/components/macro-summary";
 import { MealCard } from "@/components/meal-card";
@@ -80,20 +86,132 @@ const meals: MealEntry[] = [
 const aiMessage =
   "Nice balance today! You're 620 calories under your goal, so there's room for a nourishing dessert or a larger dinner. Consider adding leafy greens to boost fiber and keep hydration up this evening.";
 
+const galleryImages = [
+  {
+    src: "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?auto=format&fit=crop&w=400&q=80",
+    alt: "Bowl of yogurt with berries and granola",
+  },
+  {
+    src: "https://images.unsplash.com/photo-1540189549336-e6e99c3679fe?auto=format&fit=crop&w=400&q=80",
+    alt: "Avocado toast on a wooden table",
+  },
+  {
+    src: "https://images.unsplash.com/photo-1478145046317-39f10e56b5e9?auto=format&fit=crop&w=400&q=80",
+    alt: "Colorful assortment of sliced fruits",
+  },
+  {
+    src: "https://images.unsplash.com/photo-1550304943-4f24f54ddde9?auto=format&fit=crop&w=400&q=80",
+    alt: "Salmon poke bowl with chopsticks",
+  },
+  {
+    src: "https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=400&q=80",
+    alt: "Smoothie bowl with banana and seeds",
+  },
+  {
+    src: "https://images.unsplash.com/photo-1532550907401-a500c9a57435?auto=format&fit=crop&w=400&q=80",
+    alt: "Grilled chicken with vegetables",
+  },
+  {
+    src: "https://images.unsplash.com/photo-1504674900247-08fddf90b3de?auto=format&fit=crop&w=400&q=80",
+    alt: "Berry smoothie in a glass",
+  },
+  {
+    src: "https://images.unsplash.com/photo-1584270354949-1f5f4e4f3513?auto=format&fit=crop&w=400&q=80",
+    alt: "Stack of protein pancakes",
+  },
+  {
+    src: "https://images.unsplash.com/photo-1554998171-0aed1f3df971?auto=format&fit=crop&w=400&q=80",
+    alt: "Fresh salad with tomatoes and greens",
+  },
+];
+
 export default function Home() {
+  const [isGalleryOpen, setIsGalleryOpen] = useState(false);
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
+  const uploadTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    if (!showSuccess) {
+      return;
+    }
+
+    const timeout = setTimeout(() => setShowSuccess(false), 4000);
+
+    return () => clearTimeout(timeout);
+  }, [showSuccess]);
+
+  useEffect(() => {
+    return () => {
+      if (uploadTimeoutRef.current) {
+        clearTimeout(uploadTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  const handleOpenGallery = () => {
+    setSelectedImage(null);
+    setIsGalleryOpen(true);
+  };
+
+  const handleConfirmUpload = () => {
+    if (!selectedImage) {
+      return;
+    }
+
+    setIsGalleryOpen(false);
+    setIsUploading(true);
+    setShowSuccess(false);
+
+    if (uploadTimeoutRef.current) {
+      clearTimeout(uploadTimeoutRef.current);
+    }
+
+    uploadTimeoutRef.current = setTimeout(() => {
+      setIsUploading(false);
+      setShowSuccess(true);
+      uploadTimeoutRef.current = null;
+    }, 1200);
+
+    setSelectedImage(null);
+  };
+
+  const handleCloseGallery = () => {
+    setIsGalleryOpen(false);
+    setSelectedImage(null);
+  };
+
   return (
     <main className="mx-auto flex max-w-6xl flex-col gap-8 px-4 pb-16 pt-10 sm:px-6 lg:px-8">
+      {(isUploading || showSuccess) && (
+        <div className="space-y-2">
+          {isUploading && (
+            <div className="flex items-center gap-3 rounded-2xl border border-brand bg-brand-light px-4 py-3 text-sm font-medium text-brand-dark shadow-sm">
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+              Uploading your meal photo…
+            </div>
+          )}
+          {showSuccess && !isUploading && (
+            <div className="flex items-center gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700 shadow-sm">
+              <CheckCircle2 className="h-5 w-5" aria-hidden="true" />
+              Meal photo uploaded! We’ll analyze it shortly.
+            </div>
+          )}
+        </div>
+      )}
+
       <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-sm font-semibold uppercase tracking-[0.3em] text-brand-dark">Nutrition Assistant</p>
           <h1 className="mt-2 text-3xl font-semibold text-slate-900 sm:text-4xl">Your meals for Tuesday, June 4</h1>
           <p className="mt-2 max-w-2xl text-sm text-slate-600">
-            Upload photos of what you eat and get instant calorie estimates, macro breakdowns, and gentle coaching from your AI
-            companion.
+            Upload photos of what you eat and get instant calorie estimates, macro breakdowns, and gentle coaching from your AI companion.
           </p>
         </div>
         <button
           type="button"
+          onClick={handleOpenGallery}
           className="inline-flex items-center justify-center gap-2 rounded-full bg-slate-900 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-700"
         >
           Log a new meal
@@ -127,6 +245,58 @@ export default function Home() {
           </section>
         </div>
       </section>
+
+      {isGalleryOpen && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/70 px-4 py-6 sm:items-center">
+          <div className="w-full max-w-sm overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
+              <button
+                type="button"
+                onClick={handleCloseGallery}
+                className="text-sm font-semibold text-slate-500 transition hover:text-slate-900"
+              >
+                Cancel
+              </button>
+              <p className="text-sm font-semibold text-slate-900">Recent photos</p>
+              <button
+                type="button"
+                onClick={handleConfirmUpload}
+                disabled={!selectedImage}
+                className="text-sm font-semibold text-brand-dark transition disabled:cursor-not-allowed disabled:text-slate-300"
+              >
+                Add
+              </button>
+            </div>
+            <div className="max-h-[480px] overflow-y-auto p-4">
+              <div className="grid grid-cols-3 gap-2">
+                {galleryImages.map((image) => {
+                  const isSelected = selectedImage === image.src;
+
+                  return (
+                    <button
+                      key={image.src}
+                      type="button"
+                      onClick={() => setSelectedImage(image.src)}
+                      className={`relative h-28 overflow-hidden rounded-2xl border-2 transition focus:outline-none focus:ring-2 focus:ring-brand ${
+                        isSelected ? "border-brand" : "border-transparent hover:border-slate-200"
+                      }`}
+                      aria-pressed={isSelected}
+                    >
+                      <Image src={image.src} alt={image.alt} fill sizes="(max-width: 640px) 33vw, 120px" className="object-cover" />
+                      {isSelected && (
+                        <>
+                          <span className="absolute inset-0 bg-slate-900/20" aria-hidden="true" />
+                          <CheckCircle2 className="absolute right-2 top-2 h-5 w-5 text-white drop-shadow" aria-hidden="true" />
+                        </>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
