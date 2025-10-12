@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { ChangeEvent } from "react";
 
 import { AiRecap } from "@/components/ai-recap";
 import { DailyTargetsCard } from "@/components/daily-targets-card";
@@ -11,7 +12,7 @@ import { PageHeader } from "@/components/page-header";
 import { PhotoGalleryModal } from "@/components/photo-gallery-modal";
 import { QuickAdd } from "@/components/quick-add";
 import { UploadFeedback } from "@/components/upload-feedback";
-import type { GalleryImage, MacroBreakdown, MealEntry } from "@/components/types";
+import type { GallerySelection, MacroBreakdown, MealEntry } from "@/components/types";
 
 const todayMacros: MacroBreakdown = {
   calories: 1480,
@@ -104,51 +105,21 @@ const dailyTargets: DailyTarget[] = [
   },
 ];
 
-const galleryImages: GalleryImage[] = [
-  {
-    src: "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?auto=format&fit=crop&w=400&q=80",
-    alt: "Bowl of yogurt with berries and granola",
-  },
-  {
-    src: "https://images.unsplash.com/photo-1540189549336-e6e99c3679fe?auto=format&fit=crop&w=400&q=80",
-    alt: "Avocado toast on a wooden table",
-  },
-  {
-    src: "https://images.unsplash.com/photo-1478145046317-39f10e56b5e9?auto=format&fit=crop&w=400&q=80",
-    alt: "Colorful assortment of sliced fruits",
-  },
-  {
-    src: "https://images.unsplash.com/photo-1550304943-4f24f54ddde9?auto=format&fit=crop&w=400&q=80",
-    alt: "Salmon poke bowl with chopsticks",
-  },
-  {
-    src: "https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=400&q=80",
-    alt: "Smoothie bowl with banana and seeds",
-  },
-  {
-    src: "https://images.unsplash.com/photo-1532550907401-a500c9a57435?auto=format&fit=crop&w=400&q=80",
-    alt: "Grilled chicken with vegetables",
-  },
-  {
-    src: "https://images.unsplash.com/photo-1504674900247-08fddf90b3de?auto=format&fit=crop&w=400&q=80",
-    alt: "Berry smoothie in a glass",
-  },
-  {
-    src: "https://images.unsplash.com/photo-1584270354949-1f5f4e4f3513?auto=format&fit=crop&w=400&q=80",
-    alt: "Stack of protein pancakes",
-  },
-  {
-    src: "https://images.unsplash.com/photo-1554998171-0aed1f3df971?auto=format&fit=crop&w=400&q=80",
-    alt: "Fresh salad with tomatoes and greens",
-  },
-];
-
 export default function Home() {
   const [isGalleryOpen, setIsGalleryOpen] = useState(false);
-  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [selectedImageId, setSelectedImageId] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [gallerySelections, setGallerySelections] = useState<GallerySelection[]>([]);
   const uploadTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const lastSelectedFileRef = useRef<File | null>(null);
+
+  const revokePreviews = useCallback((items: GallerySelection[]) => {
+    items.forEach((item) => {
+      URL.revokeObjectURL(item.previewUrl);
+    });
+  }, []);
 
   useEffect(() => {
     if (!showSuccess) {
@@ -168,23 +139,79 @@ export default function Home() {
     };
   }, []);
 
+  useEffect(() => {
+    return () => {
+      revokePreviews(gallerySelections);
+    };
+  }, [gallerySelections, revokePreviews]);
+
+  useEffect(() => {
+    if (gallerySelections.length === 0) {
+      setSelectedImageId(null);
+      return;
+    }
+
+    const hasSelected = gallerySelections.some(
+      (item) => item.id === selectedImageId,
+    );
+
+    if (!hasSelected) {
+      setSelectedImageId(gallerySelections[0].id);
+    }
+  }, [gallerySelections, selectedImageId]);
+
+  const openFilePicker = useCallback(() => {
+    fileInputRef.current?.click();
+  }, []);
+
   const handleOpenGallery = () => {
-    setSelectedImage(null);
     setIsGalleryOpen(true);
+    if (gallerySelections.length === 0) {
+      setSelectedImageId(null);
+    }
+    openFilePicker();
   };
 
-  const handleSelectImage = (image: string) => {
-    setSelectedImage(image);
+  const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+
+    if (!files) {
+      return;
+    }
+
+    const nextSelections = Array.from(files).map((file, index) => ({
+      id: `${file.name}-${file.lastModified}-${index}`,
+      file,
+      previewUrl: URL.createObjectURL(file),
+      name: file.name,
+    }));
+
+    setGallerySelections((previous) => {
+      revokePreviews(previous);
+      return nextSelections;
+    });
+
+    setSelectedImageId(nextSelections[0]?.id ?? null);
+    setIsGalleryOpen(true);
+
+    // Reset the input so the same file can be selected again if needed.
+    event.target.value = "";
   };
 
-  const handleConfirmUpload = () => {
-    if (!selectedImage) {
+  const handleSelectImage = (imageId: string) => {
+    setSelectedImageId(imageId);
+  };
+
+  const handleConfirmUpload = (file: File, selection: GallerySelection) => {
+    if (!file || !selection) {
       return;
     }
 
     setIsGalleryOpen(false);
     setIsUploading(true);
     setShowSuccess(false);
+
+    lastSelectedFileRef.current = file;
 
     if (uploadTimeoutRef.current) {
       clearTimeout(uploadTimeoutRef.current);
@@ -196,12 +223,20 @@ export default function Home() {
       uploadTimeoutRef.current = null;
     }, 1200);
 
-    setSelectedImage(null);
+    setSelectedImageId(null);
+    setGallerySelections((previous) => {
+      revokePreviews(previous);
+      return [];
+    });
   };
 
   const handleCloseGallery = () => {
     setIsGalleryOpen(false);
-    setSelectedImage(null);
+    setSelectedImageId(null);
+    setGallerySelections((previous) => {
+      revokePreviews(previous);
+      return [];
+    });
   };
 
   return (
@@ -244,15 +279,25 @@ export default function Home() {
         </div>
       </section>
 
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        multiple
+        className="sr-only"
+        onChange={handleFileChange}
+      />
+
       <PhotoGalleryModal
         isOpen={isGalleryOpen}
-        images={galleryImages}
-        selectedImage={selectedImage}
+        images={gallerySelections}
+        selectedImageId={selectedImageId}
         onSelectImage={handleSelectImage}
         onConfirm={handleConfirmUpload}
         onClose={handleCloseGallery}
+        onBrowseMore={openFilePicker}
       />
-      </main>
-    </>
+    </main>
+  </>
   );
 }
