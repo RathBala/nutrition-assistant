@@ -15,7 +15,9 @@ export type MealEntry = {
   tags: string[];
 };
 
-export type GalleryImage = {
-  src: string;
-  alt: string;
+export type GallerySelection = {
+  id: string;
+  file: File;
+  previewUrl: string;
+  name: string;
 };

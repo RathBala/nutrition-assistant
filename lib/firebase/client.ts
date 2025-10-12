@@ -1,4 +1,10 @@
-import { getApp, getApps, initializeApp, type FirebaseOptions } from "firebase/app";
+import {
+  getApp,
+  getApps,
+  initializeApp,
+  type FirebaseApp,
+  type FirebaseOptions,
+} from "firebase/app";
 import { getAnalytics, isSupported, type Analytics } from "firebase/analytics";
 
 const firebaseConfig = {
@@ -11,22 +17,42 @@ const firebaseConfig = {
   measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
 };
 
-const missingConfigEntry = Object.entries(firebaseConfig).find(
-  ([key, value]) => !value && key !== "measurementId",
-);
+const requiredConfigKeys: Array<keyof typeof firebaseConfig> = [
+  "apiKey",
+  "authDomain",
+  "projectId",
+  "storageBucket",
+  "messagingSenderId",
+  "appId",
+];
 
-if (missingConfigEntry) {
-  throw new Error(`Missing Firebase configuration value for ${missingConfigEntry[0]}`);
-}
+const hasRequiredFirebaseConfig = requiredConfigKeys.every((key) => Boolean(firebaseConfig[key]));
 
-const app = getApps().length
-  ? getApp()
-  : initializeApp(firebaseConfig as FirebaseOptions);
-
+let firebaseApp: FirebaseApp | null = null;
 let analyticsPromise: Promise<Analytics | null> | null = null;
+
+const ensureFirebaseApp = (): FirebaseApp | null => {
+  if (!hasRequiredFirebaseConfig) {
+    return null;
+  }
+
+  if (!firebaseApp) {
+    firebaseApp = getApps().length
+      ? getApp()
+      : initializeApp(firebaseConfig as FirebaseOptions);
+  }
+
+  return firebaseApp;
+};
 
 export const getFirebaseAnalytics = async (): Promise<Analytics | null> => {
   if (typeof window === "undefined") {
+    return null;
+  }
+
+  const app = ensureFirebaseApp();
+
+  if (!app) {
     return null;
   }
 
@@ -39,4 +65,4 @@ export const getFirebaseAnalytics = async (): Promise<Analytics | null> => {
   return analyticsPromise;
 };
 
-export { app };
+export const getFirebaseApp = (): FirebaseApp | null => ensureFirebaseApp();
