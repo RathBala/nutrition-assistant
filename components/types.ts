@@ -14,3 +14,8 @@ export type MealEntry = {
   macros: MacroBreakdown;
   tags: string[];
 };
+
+export type GalleryImage = {
+  src: string;
+  alt: string;
+};

@@ -1,14 +1,17 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { CheckCircle2, Loader2 } from "lucide-react";
-import Image from "next/image";
 
 import { AiRecap } from "@/components/ai-recap";
+import { DailyTargetsCard } from "@/components/daily-targets-card";
+import type { DailyTarget } from "@/components/daily-targets-card";
 import { MacroSummary } from "@/components/macro-summary";
 import { MealCard } from "@/components/meal-card";
+import { PageHeader } from "@/components/page-header";
+import { PhotoGalleryModal } from "@/components/photo-gallery-modal";
 import { QuickAdd } from "@/components/quick-add";
-import type { MealEntry, MacroBreakdown } from "@/components/types";
+import { UploadFeedback } from "@/components/upload-feedback";
+import type { GalleryImage, MacroBreakdown, MealEntry } from "@/components/types";
 
 const todayMacros: MacroBreakdown = {
   calories: 1480,
@@ -86,7 +89,22 @@ const meals: MealEntry[] = [
 const aiMessage =
   "Nice balance today! You're 620 calories under your goal, so there's room for a nourishing dessert or a larger dinner. Consider adding leafy greens to boost fiber and keep hydration up this evening.";
 
-const galleryImages = [
+const dailyTargets: DailyTarget[] = [
+  {
+    label: "Stay within 2100 kcal goal",
+    completed: true,
+  },
+  {
+    label: "Hit 90g+ protein",
+    completed: true,
+  },
+  {
+    label: "Add 2 cups of vegetables at dinner",
+    completed: false,
+  },
+];
+
+const galleryImages: GalleryImage[] = [
   {
     src: "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?auto=format&fit=crop&w=400&q=80",
     alt: "Bowl of yogurt with berries and granola",
@@ -155,6 +173,10 @@ export default function Home() {
     setIsGalleryOpen(true);
   };
 
+  const handleSelectImage = (image: string) => {
+    setSelectedImage(image);
+  };
+
   const handleConfirmUpload = () => {
     if (!selectedImage) {
       return;
@@ -184,39 +206,14 @@ export default function Home() {
 
   return (
     <main className="mx-auto flex max-w-6xl flex-col gap-8 px-4 pb-16 pt-10 sm:px-6 lg:px-8">
-      {(isUploading || showSuccess) && (
-        <div className="space-y-2">
-          {isUploading && (
-            <div className="flex items-center gap-3 rounded-2xl border border-brand bg-brand-light px-4 py-3 text-sm font-medium text-brand-dark shadow-sm">
-              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-              Uploading your meal photo…
-            </div>
-          )}
-          {showSuccess && !isUploading && (
-            <div className="flex items-center gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700 shadow-sm">
-              <CheckCircle2 className="h-5 w-5" aria-hidden="true" />
-              Meal photo uploaded! We’ll analyze it shortly.
-            </div>
-          )}
-        </div>
-      )}
+      <UploadFeedback isUploading={isUploading} showSuccess={showSuccess} />
 
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p className="text-sm font-semibold uppercase tracking-[0.3em] text-brand-dark">Nutrition Assistant</p>
-          <h1 className="mt-2 text-3xl font-semibold text-slate-900 sm:text-4xl">Your meals for Tuesday, June 4</h1>
-          <p className="mt-2 max-w-2xl text-sm text-slate-600">
-            Upload photos of what you eat and get instant calorie estimates, macro breakdowns, and gentle coaching from your AI companion.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={handleOpenGallery}
-          className="inline-flex items-center justify-center gap-2 rounded-full bg-slate-900 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-700"
-        >
-          Log a new meal
-        </button>
-      </header>
+      <PageHeader
+        eyebrow="Nutrition Assistant"
+        title="Your meals for Tuesday, June 4"
+        description="Upload photos of what you eat and get instant calorie estimates, macro breakdowns, and gentle coaching from your AI companion."
+        onLogMeal={handleOpenGallery}
+      />
 
       <QuickAdd />
       <MacroSummary macros={todayMacros} goal={macroGoals} />
@@ -229,74 +226,18 @@ export default function Home() {
         </div>
         <div className="space-y-5">
           <AiRecap message={aiMessage} />
-          <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-            <h2 className="text-xl font-semibold text-slate-900">Daily targets</h2>
-            <ul className="mt-4 space-y-3 text-sm text-slate-600">
-              <li>✅ Stay within 2100 kcal goal</li>
-              <li>✅ Hit 90g+ protein</li>
-              <li>⬜ Add 2 cups of vegetables at dinner</li>
-            </ul>
-            <button
-              type="button"
-              className="mt-6 w-full rounded-full border border-brand bg-white px-4 py-2 text-sm font-semibold text-brand-dark transition hover:bg-brand-light"
-            >
-              Adjust targets
-            </button>
-          </section>
+          <DailyTargetsCard targets={dailyTargets} />
         </div>
       </section>
 
-      {isGalleryOpen && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/70 px-4 py-6 sm:items-center">
-          <div className="w-full max-w-sm overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-2xl">
-            <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
-              <button
-                type="button"
-                onClick={handleCloseGallery}
-                className="text-sm font-semibold text-slate-500 transition hover:text-slate-900"
-              >
-                Cancel
-              </button>
-              <p className="text-sm font-semibold text-slate-900">Recent photos</p>
-              <button
-                type="button"
-                onClick={handleConfirmUpload}
-                disabled={!selectedImage}
-                className="text-sm font-semibold text-brand-dark transition disabled:cursor-not-allowed disabled:text-slate-300"
-              >
-                Add
-              </button>
-            </div>
-            <div className="max-h-[480px] overflow-y-auto p-4">
-              <div className="grid grid-cols-3 gap-2">
-                {galleryImages.map((image) => {
-                  const isSelected = selectedImage === image.src;
-
-                  return (
-                    <button
-                      key={image.src}
-                      type="button"
-                      onClick={() => setSelectedImage(image.src)}
-                      className={`relative h-28 overflow-hidden rounded-2xl border-2 transition focus:outline-none focus:ring-2 focus:ring-brand ${
-                        isSelected ? "border-brand" : "border-transparent hover:border-slate-200"
-                      }`}
-                      aria-pressed={isSelected}
-                    >
-                      <Image src={image.src} alt={image.alt} fill sizes="(max-width: 640px) 33vw, 120px" className="object-cover" />
-                      {isSelected && (
-                        <>
-                          <span className="absolute inset-0 bg-slate-900/20" aria-hidden="true" />
-                          <CheckCircle2 className="absolute right-2 top-2 h-5 w-5 text-white drop-shadow" aria-hidden="true" />
-                        </>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <PhotoGalleryModal
+        isOpen={isGalleryOpen}
+        images={galleryImages}
+        selectedImage={selectedImage}
+        onSelectImage={handleSelectImage}
+        onConfirm={handleConfirmUpload}
+        onClose={handleCloseGallery}
+      />
     </main>
   );
 }
