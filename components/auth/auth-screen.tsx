@@ -106,11 +106,6 @@ export function AuthScreen() {
 
     const auth = getFirebaseAuth();
 
-    if (!auth) {
-      setError("Firebase isn\'t configured yet. Add your environment variables to enable sign in.");
-      return;
-    }
-
     if (isSignUp && formState.password !== formState.confirmPassword) {
       setError("Passwords need to match. Try again.");
       return;
@@ -154,11 +149,6 @@ export function AuthScreen() {
     }
 
     const auth = getFirebaseAuth();
-
-    if (!auth) {
-      setError("Firebase isn\'t configured yet. Add your environment variables to enable sign in.");
-      return;
-    }
 
     setIsResetting(true);
 

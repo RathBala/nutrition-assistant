@@ -8,36 +8,19 @@ import {
 import { getAnalytics, isSupported, type Analytics } from "firebase/analytics";
 
 const firebaseConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
-  measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
+  apiKey: "AIzaSyDToi_CmPMLWB2BR6BKx8WGatqrFHJjk1Q",
+  authDomain: "thrive-nutrition-a470c.firebaseapp.com",
+  projectId: "thrive-nutrition-a470c",
+  storageBucket: "thrive-nutrition-a470c.firebasestorage.app",
+  messagingSenderId: "698727992351",
+  appId: "1:698727992351:web:d2196259549e94ad65d92a",
+  measurementId: "G-ZZLQ7GBHGK",
 };
-
-const requiredConfigKeys: Array<keyof typeof firebaseConfig> = [
-  "apiKey",
-  "authDomain",
-  "projectId",
-  "storageBucket",
-  "messagingSenderId",
-  "appId",
-];
-
-const hasRequiredFirebaseConfig = requiredConfigKeys.every((key) => Boolean(firebaseConfig[key]));
-
-export const isFirebaseConfigured = hasRequiredFirebaseConfig;
 
 let firebaseApp: FirebaseApp | null = null;
 let analyticsPromise: Promise<Analytics | null> | null = null;
 
-const ensureFirebaseApp = (): FirebaseApp | null => {
-  if (!hasRequiredFirebaseConfig) {
-    return null;
-  }
-
+const ensureFirebaseApp = (): FirebaseApp => {
   if (!firebaseApp) {
     firebaseApp = getApps().length
       ? getApp()
@@ -54,10 +37,6 @@ export const getFirebaseAnalytics = async (): Promise<Analytics | null> => {
 
   const app = ensureFirebaseApp();
 
-  if (!app) {
-    return null;
-  }
-
   if (!analyticsPromise) {
     analyticsPromise = isSupported()
       .then((supported) => (supported ? getAnalytics(app) : null))
@@ -67,4 +46,4 @@ export const getFirebaseAnalytics = async (): Promise<Analytics | null> => {
   return analyticsPromise;
 };
 
-export const getFirebaseApp = (): FirebaseApp | null => ensureFirebaseApp();
+export const getFirebaseApp = (): FirebaseApp => ensureFirebaseApp();

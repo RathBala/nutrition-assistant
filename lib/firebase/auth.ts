@@ -6,12 +6,8 @@ import { getFirebaseApp } from "./client";
 
 let cachedAuth: Auth | null = null;
 
-export const getFirebaseAuth = (): Auth | null => {
+export const getFirebaseAuth = (): Auth => {
   const app = getFirebaseApp();
-
-  if (!app) {
-    return null;
-  }
 
   if (!cachedAuth) {
     cachedAuth = getAuth(app);

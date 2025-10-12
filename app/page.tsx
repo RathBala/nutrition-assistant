@@ -109,7 +109,7 @@ const dailyTargets: DailyTarget[] = [
 ];
 
 export default function Home() {
-  const { user, loading: authLoading, isConfigured, signOut: signOutUser } = useAuth();
+  const { user, loading: authLoading, signOut: signOutUser } = useAuth();
   const [signOutPending, setSignOutPending] = useState(false);
   const [signOutError, setSignOutError] = useState<string | null>(null);
 
@@ -134,10 +134,6 @@ export default function Home() {
 
   if (authLoading) {
     return <AuthLoadingScreen />;
-  }
-
-  if (!isConfigured) {
-    return <MissingFirebaseConfigNotice />;
   }
 
   if (!user) {
@@ -427,44 +423,6 @@ function AuthLoadingScreen() {
           <p className="text-base font-semibold text-slate-900">Just a moment…</p>
           <p className="mt-1 text-sm text-slate-600">We’re verifying your account details.</p>
         </div>
-      </div>
-    </div>
-  );
-}
-
-const requiredFirebaseEnvVars = [
-  "NEXT_PUBLIC_FIREBASE_API_KEY",
-  "NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN",
-  "NEXT_PUBLIC_FIREBASE_PROJECT_ID",
-  "NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET",
-  "NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID",
-  "NEXT_PUBLIC_FIREBASE_APP_ID",
-];
-
-function MissingFirebaseConfigNotice() {
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4 py-16">
-      <div className="max-w-xl space-y-6 rounded-3xl border border-amber-200 bg-white px-10 py-12 text-center shadow-xl">
-        <div className="space-y-2">
-          <span className="inline-flex items-center justify-center rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-amber-700">
-            Setup required
-          </span>
-          <h2 className="text-2xl font-semibold text-slate-900">Add your Firebase credentials</h2>
-          <p className="text-sm text-slate-600">
-            Update your <code className="rounded bg-slate-100 px-1 py-0.5 text-xs">.env.local</code> with the values below, then restart the development server.
-          </p>
-        </div>
-        <ul className="space-y-2 text-left text-sm text-slate-700">
-          {requiredFirebaseEnvVars.map((variable) => (
-            <li key={variable} className="flex items-center gap-3">
-              <span className="h-2 w-2 rounded-full bg-amber-400" aria-hidden="true" />
-              <code className="rounded bg-slate-100 px-2 py-1 text-xs text-slate-800">{variable}</code>
-            </li>
-          ))}
-        </ul>
-        <p className="text-xs text-slate-500">
-          Need help? Follow the Firebase Web setup guide to generate these values.
-        </p>
       </div>
     </div>
   );
