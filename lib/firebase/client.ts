@@ -28,6 +28,8 @@ const requiredConfigKeys: Array<keyof typeof firebaseConfig> = [
 
 const hasRequiredFirebaseConfig = requiredConfigKeys.every((key) => Boolean(firebaseConfig[key]));
 
+export const isFirebaseConfigured = hasRequiredFirebaseConfig;
+
 let firebaseApp: FirebaseApp | null = null;
 let analyticsPromise: Promise<Analytics | null> | null = null;
 
