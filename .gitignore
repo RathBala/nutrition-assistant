@@ -3,7 +3,6 @@ node_modules
 out
 .DS_Store
 .env*
-!.env.example
 yarn.lock
 package-lock.json
 pnpm-lock.yaml
