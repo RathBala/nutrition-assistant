@@ -205,12 +205,26 @@ export default function Home() {
   };
 
   return (
-    <main className="mx-auto flex max-w-6xl flex-col gap-8 px-4 pb-16 pt-10 sm:px-6 lg:px-8">
-      <UploadFeedback isUploading={isUploading} showSuccess={showSuccess} />
+    <>
+      <header className="border-b border-slate-200 bg-white/80 py-4 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-white/60">
+        <div className="mx-auto flex max-w-6xl items-center px-4 sm:px-6 lg:px-8">
+          <a
+            href="/"
+            className="text-lg font-semibold tracking-[0.4em] text-slate-900"
+            style={{ fontVariant: "small-caps" }}
+            aria-label="Thrive home"
+          >
+            thrive
+          </a>
+        </div>
+      </header>
 
-      <PageHeader
-        eyebrow="Nutrition Assistant"
-        title="Your meals for Tuesday, June 4"
+      <main className="mx-auto flex max-w-6xl flex-col gap-8 px-4 pb-16 pt-10 sm:px-6 lg:px-8">
+        <UploadFeedback isUploading={isUploading} showSuccess={showSuccess} />
+
+        <PageHeader
+          eyebrow="Nutrition Assistant"
+          title="Your meals for Tuesday, June 4"
         description="Upload photos of what you eat and get instant calorie estimates, macro breakdowns, and gentle coaching from your AI companion."
         onLogMeal={handleOpenGallery}
       />
@@ -238,6 +252,7 @@ export default function Home() {
         onConfirm={handleConfirmUpload}
         onClose={handleCloseGallery}
       />
-    </main>
+      </main>
+    </>
   );
 }
