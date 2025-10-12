@@ -173,6 +173,7 @@ function Dashboard({
   const [gallerySelections, setGallerySelections] = useState<GallerySelection[]>([]);
   const uploadTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const cameraInputRef = useRef<HTMLInputElement | null>(null);
 
   const revokePreviews = useCallback((items: GallerySelection[]) => {
     items.forEach((item) => {
@@ -221,18 +222,31 @@ function Dashboard({
     fileInputRef.current?.click();
   }, []);
 
-  const handleOpenGallery = () => {
-    setIsGalleryOpen(true);
-    if (gallerySelections.length === 0) {
-      setSelectedImageId(null);
-    }
+  const openCameraPicker = useCallback(() => {
+    cameraInputRef.current?.click();
+  }, []);
+
+  const handleOpenGallery = useCallback(() => {
+    setSelectedImageId(null);
     openFilePicker();
-  };
+  }, [openFilePicker]);
+
+  const handleCaptureMeal = useCallback(() => {
+    setSelectedImageId(null);
+    openCameraPicker();
+  }, [openCameraPicker]);
 
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
 
-    if (!files) {
+    if (!files || files.length === 0) {
+      event.target.value = "";
+
+      if (gallerySelections.length === 0) {
+        setSelectedImageId(null);
+        setIsGalleryOpen(false);
+      }
+
       return;
     }
 
@@ -376,7 +390,7 @@ function Dashboard({
           onLogMeal={handleOpenGallery}
         />
 
-        <QuickAdd />
+        <QuickAdd onCapture={handleCaptureMeal} onUpload={handleOpenGallery} />
         <MacroSummary macros={todayMacros} goal={macroGoals} />
 
         <section className="grid gap-6 lg:grid-cols-[1fr_minmax(260px,320px)]">
@@ -396,6 +410,14 @@ function Dashboard({
           type="file"
           accept="image/*"
           multiple
+          className="sr-only"
+          onChange={handleFileChange}
+        />
+        <input
+          ref={cameraInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
           className="sr-only"
           onChange={handleFileChange}
         />
