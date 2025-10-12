@@ -6,6 +6,7 @@ A responsive Next.js proof-of-concept that demonstrates how a nutrition assistan
 
 ```bash
 npm install
+cp .env .env.local
 npm run dev
 ```
 
