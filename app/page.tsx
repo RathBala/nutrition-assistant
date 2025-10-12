@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
+import type { User } from "firebase/auth";
 
 import { AiRecap } from "@/components/ai-recap";
 import { DailyTargetsCard } from "@/components/daily-targets-card";
@@ -13,6 +14,8 @@ import { PhotoGalleryModal } from "@/components/photo-gallery-modal";
 import { QuickAdd } from "@/components/quick-add";
 import { UploadFeedback } from "@/components/upload-feedback";
 import type { GallerySelection, MacroBreakdown, MealEntry } from "@/components/types";
+import { AuthScreen } from "@/components/auth/auth-screen";
+import { useAuth } from "@/components/auth-provider";
 
 const todayMacros: MacroBreakdown = {
   calories: 1480,
@@ -106,6 +109,63 @@ const dailyTargets: DailyTarget[] = [
 ];
 
 export default function Home() {
+  const { user, loading: authLoading, signOut: signOutUser } = useAuth();
+  const [signOutPending, setSignOutPending] = useState(false);
+  const [signOutError, setSignOutError] = useState<string | null>(null);
+
+  const handleSignOut = async () => {
+    if (signOutPending) {
+      return;
+    }
+
+    setSignOutError(null);
+    setSignOutPending(true);
+
+    try {
+      await signOutUser();
+    } catch {
+      setSignOutError("We couldn't sign you out. Please try again.");
+    } finally {
+      setSignOutPending(false);
+    }
+  };
+
+  const dismissSignOutError = () => setSignOutError(null);
+
+  if (authLoading) {
+    return <AuthLoadingScreen />;
+  }
+
+  if (!user) {
+    return <AuthScreen />;
+  }
+
+  return (
+    <Dashboard
+      user={user}
+      onSignOut={handleSignOut}
+      signOutPending={signOutPending}
+      signOutError={signOutError}
+      onDismissSignOutError={dismissSignOutError}
+    />
+  );
+}
+
+type DashboardProps = {
+  user: User;
+  onSignOut: () => Promise<void>;
+  signOutPending: boolean;
+  signOutError: string | null;
+  onDismissSignOutError: () => void;
+};
+
+function Dashboard({
+  user,
+  onSignOut,
+  signOutPending,
+  signOutError,
+  onDismissSignOutError,
+}: DashboardProps) {
   const [isGalleryOpen, setIsGalleryOpen] = useState(false);
   const [selectedImageId, setSelectedImageId] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -113,7 +173,6 @@ export default function Home() {
   const [gallerySelections, setGallerySelections] = useState<GallerySelection[]>([]);
   const uploadTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const lastSelectedFileRef = useRef<File | null>(null);
 
   const revokePreviews = useCallback((items: GallerySelection[]) => {
     items.forEach((item) => {
@@ -151,9 +210,7 @@ export default function Home() {
       return;
     }
 
-    const hasSelected = gallerySelections.some(
-      (item) => item.id === selectedImageId,
-    );
+    const hasSelected = gallerySelections.some((item) => item.id === selectedImageId);
 
     if (!hasSelected) {
       setSelectedImageId(gallerySelections[0].id);
@@ -194,7 +251,6 @@ export default function Home() {
     setSelectedImageId(nextSelections[0]?.id ?? null);
     setIsGalleryOpen(true);
 
-    // Reset the input so the same file can be selected again if needed.
     event.target.value = "";
   };
 
@@ -210,8 +266,6 @@ export default function Home() {
     setIsGalleryOpen(false);
     setIsUploading(true);
     setShowSuccess(false);
-
-    lastSelectedFileRef.current = file;
 
     if (uploadTimeoutRef.current) {
       clearTimeout(uploadTimeoutRef.current);
@@ -239,10 +293,26 @@ export default function Home() {
     });
   };
 
+  const userEmail = user.email ?? "";
+  const userDisplayName = user.displayName?.trim() || userEmail.split("@")[0] || "Member";
+  const userInitials =
+    user.displayName?.trim()
+      ? user.displayName
+          .trim()
+          .split(/\s+/)
+          .map((part) => part[0]?.toUpperCase() ?? "")
+          .join("")
+          .slice(0, 2) || "U"
+      : userEmail.split("@")[0]?.slice(0, 2).toUpperCase() || "U";
+
+  const handleSignOutClick = () => {
+    void onSignOut();
+  };
+
   return (
     <>
       <header className="border-b border-slate-200 bg-white/80 py-4 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-white/60">
-        <div className="mx-auto flex max-w-6xl items-center px-4 sm:px-6 lg:px-8">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 sm:px-6 lg:px-8">
           <a
             href="/"
             className="text-lg font-semibold tracking-[0.4em] text-slate-900"
@@ -251,53 +321,109 @@ export default function Home() {
           >
             thrive
           </a>
+          <div className="flex items-center gap-4">
+            <div className="hidden text-right text-xs sm:block">
+              <p className="font-semibold text-slate-900">{userDisplayName}</p>
+              {userEmail ? <p className="text-slate-500">{userEmail}</p> : null}
+            </div>
+            <div
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-100 text-sm font-semibold uppercase text-emerald-700"
+              aria-hidden="true"
+            >
+              {userInitials}
+            </div>
+            <button
+              type="button"
+              onClick={handleSignOutClick}
+              disabled={signOutPending}
+              className="inline-flex items-center justify-center gap-2 rounded-full border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-400"
+            >
+              {signOutPending ? (
+                <>
+                  <span className="h-3.5 w-3.5 animate-spin rounded-full border border-slate-400 border-t-transparent" aria-hidden="true" />
+                  Signing out…
+                </>
+              ) : (
+                "Sign out"
+              )}
+            </button>
+          </div>
         </div>
       </header>
 
       <main className="mx-auto flex max-w-6xl flex-col gap-8 px-4 pb-16 pt-10 sm:px-6 lg:px-8">
         <UploadFeedback isUploading={isUploading} showSuccess={showSuccess} />
 
+        {signOutError ? (
+          <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert" aria-live="assertive">
+            <div className="flex items-start justify-between gap-4">
+              <p>{signOutError}</p>
+              <button
+                type="button"
+                onClick={onDismissSignOutError}
+                className="text-xs font-semibold text-red-700/80 transition hover:text-red-800"
+              >
+                Dismiss
+              </button>
+            </div>
+          </div>
+        ) : null}
+
         <PageHeader
           eyebrow="Nutrition Assistant"
           title="Your meals for Tuesday, June 4"
-        description="Upload photos of what you eat and get instant calorie estimates, macro breakdowns, and gentle coaching from your AI companion."
-        onLogMeal={handleOpenGallery}
-      />
+          description="Upload photos of what you eat and get instant calorie estimates, macro breakdowns, and gentle coaching from your AI companion."
+          onLogMeal={handleOpenGallery}
+        />
 
-      <QuickAdd />
-      <MacroSummary macros={todayMacros} goal={macroGoals} />
+        <QuickAdd />
+        <MacroSummary macros={todayMacros} goal={macroGoals} />
 
-      <section className="grid gap-6 lg:grid-cols-[1fr_minmax(260px,320px)]">
-        <div className="space-y-5">
-          {meals.map((meal) => (
-            <MealCard key={meal.id} meal={meal} />
-          ))}
+        <section className="grid gap-6 lg:grid-cols-[1fr_minmax(260px,320px)]">
+          <div className="space-y-5">
+            {meals.map((meal) => (
+              <MealCard key={meal.id} meal={meal} />
+            ))}
+          </div>
+          <div className="space-y-5">
+            <AiRecap message={aiMessage} />
+            <DailyTargetsCard targets={dailyTargets} />
+          </div>
+        </section>
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          multiple
+          className="sr-only"
+          onChange={handleFileChange}
+        />
+
+        <PhotoGalleryModal
+          isOpen={isGalleryOpen}
+          images={gallerySelections}
+          selectedImageId={selectedImageId}
+          onSelectImage={handleSelectImage}
+          onConfirm={handleConfirmUpload}
+          onClose={handleCloseGallery}
+          onBrowseMore={openFilePicker}
+        />
+      </main>
+    </>
+  );
+}
+
+function AuthLoadingScreen() {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-slate-50">
+      <div className="flex flex-col items-center gap-4 rounded-3xl border border-slate-200 bg-white px-12 py-10 text-center shadow-xl">
+        <span className="h-12 w-12 animate-spin rounded-full border-[3px] border-emerald-400 border-t-transparent" aria-hidden="true" />
+        <div>
+          <p className="text-base font-semibold text-slate-900">Just a moment…</p>
+          <p className="mt-1 text-sm text-slate-600">We’re verifying your account details.</p>
         </div>
-        <div className="space-y-5">
-          <AiRecap message={aiMessage} />
-          <DailyTargetsCard targets={dailyTargets} />
-        </div>
-      </section>
-
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/*"
-        multiple
-        className="sr-only"
-        onChange={handleFileChange}
-      />
-
-      <PhotoGalleryModal
-        isOpen={isGalleryOpen}
-        images={gallerySelections}
-        selectedImageId={selectedImageId}
-        onSelectImage={handleSelectImage}
-        onConfirm={handleConfirmUpload}
-        onClose={handleCloseGallery}
-        onBrowseMore={openFilePicker}
-      />
-    </main>
-  </>
+      </div>
+    </div>
   );
 }
