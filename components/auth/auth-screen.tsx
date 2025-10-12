@@ -2,19 +2,18 @@
 
 import { useMemo, useState } from "react";
 import {
+  GoogleAuthProvider,
   createUserWithEmailAndPassword,
   sendPasswordResetEmail,
   signInWithEmailAndPassword,
-  updateProfile,
+  signInWithPopup,
 } from "firebase/auth";
 
 import { getFirebaseAuth } from "@/lib/firebase/auth";
 
 const initialFormState = {
-  fullName: "",
   email: "",
   password: "",
-  confirmPassword: "",
 };
 
 type AuthMode = "signIn" | "signUp";
@@ -26,32 +25,12 @@ type FirebaseError = {
 
 const firebaseErrorMessages: Record<string, string> = {
   "auth/email-already-in-use": "This email is already registered. Try signing in instead.",
-  "auth/invalid-credential": "The email and password combination didn\'t match our records.",
+  "auth/invalid-credential": "The email and password combination didn't match our records.",
   "auth/invalid-email": "Please enter a valid email address.",
   "auth/user-disabled": "This account has been disabled.",
-  "auth/user-not-found": "We couldn\'t find an account with that email. Try creating one instead.",
+  "auth/user-not-found": "We couldn't find an account with that email. Try creating one instead.",
   "auth/wrong-password": "Incorrect password. Double-check and try again.",
   "auth/weak-password": "Your password should be at least 8 characters.",
-};
-
-const getInitials = (fullName: string, email: string) => {
-  if (fullName.trim()) {
-    return fullName
-      .split(/\s+/)
-      .map((part) => part[0]?.toUpperCase())
-      .join("")
-      .slice(0, 2);
-  }
-
-  return email.charAt(0).toUpperCase();
-};
-
-const getFriendlyName = (fullName: string, email: string) => {
-  if (fullName.trim()) {
-    return fullName.trim();
-  }
-
-  return email.split("@")[0] ?? "there";
 };
 
 export function AuthScreen() {
@@ -61,6 +40,7 @@ export function AuthScreen() {
   const [error, setError] = useState<string | null>(null);
   const [resetMessage, setResetMessage] = useState<string | null>(null);
   const [isResetting, setIsResetting] = useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
 
   const isSignUp = mode === "signUp";
   const isPasswordLongEnough = formState.password.length >= 8;
@@ -106,11 +86,6 @@ export function AuthScreen() {
 
     const auth = getFirebaseAuth();
 
-    if (isSignUp && formState.password !== formState.confirmPassword) {
-      setError("Passwords need to match. Try again.");
-      return;
-    }
-
     if (isSignUp && !isPasswordLongEnough) {
       setError("Use at least 8 characters to create a strong password.");
       return;
@@ -120,15 +95,7 @@ export function AuthScreen() {
 
     try {
       if (isSignUp) {
-        const credentials = await createUserWithEmailAndPassword(
-          auth,
-          formState.email,
-          formState.password,
-        );
-
-        if (formState.fullName.trim()) {
-          await updateProfile(credentials.user, { displayName: formState.fullName.trim() });
-        }
+        await createUserWithEmailAndPassword(auth, formState.email, formState.password);
       } else {
         await signInWithEmailAndPassword(auth, formState.email, formState.password);
       }
@@ -139,12 +106,30 @@ export function AuthScreen() {
     }
   };
 
+  const handleGoogleSignIn = async () => {
+    setError(null);
+    setResetMessage(null);
+
+    const auth = getFirebaseAuth();
+    const provider = new GoogleAuthProvider();
+
+    setIsGoogleLoading(true);
+
+    try {
+      await signInWithPopup(auth, provider);
+    } catch (firebaseError) {
+      setError(getErrorMessage(firebaseError));
+    } finally {
+      setIsGoogleLoading(false);
+    }
+  };
+
   const handlePasswordReset = async () => {
     setError(null);
     setResetMessage(null);
 
     if (!formState.email) {
-      setError("Enter the email you registered with and we\'ll send reset instructions.");
+      setError("Enter the email you registered with and we'll send reset instructions.");
       return;
     }
 
@@ -172,12 +157,7 @@ export function AuthScreen() {
     }
 
     if (isSignUp) {
-      return (
-        !formState.fullName.trim() ||
-        !formState.confirmPassword ||
-        formState.password !== formState.confirmPassword ||
-        !isPasswordLongEnough
-      );
+      return !isPasswordLongEnough;
     }
 
     return false;
@@ -199,18 +179,12 @@ export function AuthScreen() {
             </p>
           </div>
           <div className="rounded-2xl bg-white/10 p-6 backdrop-blur">
-              <p className="text-sm text-emerald-100/90">
-                “Having a calm place to track meals makes a huge difference. Nutrition Assistant keeps me motivated with small,
-                doable nudges.”
-              </p>
-            <div className="mt-4 flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/20 text-sm font-semibold uppercase text-white">
-                {getInitials(formState.fullName, formState.email || "A")}
-              </div>
-              <div className="text-sm">
-                <p className="font-semibold text-white">{getFriendlyName(formState.fullName, formState.email || "A")}</p>
-                <p className="text-emerald-100/80">Nutrition Enthusiast</p>
-              </div>
+            <p className="text-sm text-emerald-100/90">
+              “Having a calm place to track meals makes a huge difference. Nutrition Assistant keeps me motivated with small, doable nudges.”
+            </p>
+            <div className="mt-4 text-sm">
+              <p className="font-semibold text-white">Taylor, community member</p>
+              <p className="text-emerald-100/80">Nutrition Enthusiast</p>
             </div>
           </div>
         </div>
@@ -234,24 +208,6 @@ export function AuthScreen() {
           ) : null}
 
           <form onSubmit={handleSubmit} className="space-y-5">
-            {isSignUp ? (
-              <div className="space-y-2">
-                <label htmlFor="fullName" className="text-sm font-medium text-slate-700">
-                  Full name
-                </label>
-                <input
-                  id="fullName"
-                  name="fullName"
-                  type="text"
-                  autoComplete="name"
-                  placeholder="Taylor Nutrition"
-                  value={formState.fullName}
-                  onChange={handleChange}
-                  className="w-full rounded-2xl border border-slate-200 bg-slate-50/60 px-4 py-3 text-sm text-slate-900 shadow-sm transition focus:border-emerald-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-200"
-                />
-              </div>
-            ) : null}
-
             <div className="space-y-2">
               <label htmlFor="email" className="text-sm font-medium text-slate-700">
                 Email
@@ -283,7 +239,7 @@ export function AuthScreen() {
                 className="w-full rounded-2xl border border-slate-200 bg-slate-50/60 px-4 py-3 text-sm text-slate-900 shadow-sm transition focus:border-emerald-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-200"
               />
               {isSignUp ? (
-                <p className="text-xs text-slate-500">Use at least 8 characters and include something memorable.</p>
+                <p className="text-xs text-slate-500">Use at least 8 characters to create a strong password.</p>
               ) : (
                 <button
                   type="button"
@@ -295,24 +251,6 @@ export function AuthScreen() {
                 </button>
               )}
             </div>
-
-            {isSignUp ? (
-              <div className="space-y-2">
-                <label htmlFor="confirmPassword" className="text-sm font-medium text-slate-700">
-                  Confirm password
-                </label>
-                <input
-                  id="confirmPassword"
-                  name="confirmPassword"
-                  type="password"
-                  autoComplete="new-password"
-                  placeholder="••••••••"
-                  value={formState.confirmPassword}
-                  onChange={handleChange}
-                  className="w-full rounded-2xl border border-slate-200 bg-slate-50/60 px-4 py-3 text-sm text-slate-900 shadow-sm transition focus:border-emerald-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-200"
-                />
-              </div>
-            ) : null}
 
             <button
               type="submit"
@@ -329,6 +267,41 @@ export function AuthScreen() {
               )}
             </button>
           </form>
+
+          <div className="mt-6 flex items-center gap-4">
+            <div className="h-px flex-1 bg-slate-200" aria-hidden="true" />
+            <span className="text-xs font-medium uppercase tracking-[0.25em] text-slate-400">Or</span>
+            <div className="h-px flex-1 bg-slate-200" aria-hidden="true" />
+          </div>
+
+          <button
+            type="button"
+            onClick={handleGoogleSignIn}
+            disabled={isSubmitting || isGoogleLoading}
+            className="mt-6 inline-flex w-full items-center justify-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-slate-300 hover:text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 disabled:cursor-not-allowed disabled:opacity-70"
+          >
+            <span className="inline-flex h-5 w-5 items-center justify-center" aria-hidden="true">
+              <svg viewBox="0 0 24 24" aria-hidden="true" className="h-5 w-5">
+                <path
+                  fill="#4285F4"
+                  d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.56c2.08-1.92 3.28-4.76 3.28-8.1z"
+                />
+                <path
+                  fill="#34A853"
+                  d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.56-2.77c-.98.66-2.23 1.06-3.72 1.06-2.86 0-5.28-1.93-6.15-4.53H2.18v2.84A11 11 0 0 0 12 23z"
+                />
+                <path
+                  fill="#FBBC05"
+                  d="M5.85 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18A11 11 0 0 0 1 12c0 1.76.42 3.42 1.18 4.93l3.67-2.84z"
+                />
+                <path
+                  fill="#EA4335"
+                  d="M12 4.88c1.62 0 3.07.56 4.22 1.64l3.16-3.16C17.46 1.63 14.97.5 12 .5A11 11 0 0 0 2.18 7.07l3.67 2.84C6.72 6.81 9.14 4.88 12 4.88z"
+                />
+              </svg>
+            </span>
+            <span>{isGoogleLoading ? "Connecting to Google…" : "Continue with Google"}</span>
+          </button>
 
           <div className="mt-6 text-center text-sm text-slate-600 md:text-left">
             {isSignUp ? (
