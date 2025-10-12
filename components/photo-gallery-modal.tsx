@@ -25,11 +25,15 @@ export function PhotoGalleryModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col justify-end bg-slate-900/70 backdrop-blur-sm transition-opacity">
-      <div className="flex w-full justify-center px-4 pb-4 sm:pb-10">
-        <div className="w-full max-w-md overflow-hidden rounded-t-[32px] border border-slate-200/80 bg-white shadow-2xl animate-sheet-up">
-          <div className="flex flex-col gap-4 px-6 pb-4 pt-3">
-            <span className="mx-auto h-1.5 w-16 rounded-full bg-slate-200" aria-hidden="true" />
+    <div className="fixed inset-0 z-50 flex bg-slate-900/70 backdrop-blur-sm transition-opacity">
+      <div className="flex h-full w-full items-end justify-center sm:items-stretch sm:justify-end">
+        <div
+          className="w-full max-h-[85vh] overflow-hidden rounded-t-[32px] border border-slate-200/80 bg-white shadow-2xl animate-sheet-up sm:h-full sm:max-h-none sm:max-w-[420px] sm:rounded-none sm:border-y-0 sm:border-l sm:shadow-xl sm:animate-drawer-in"
+          role="dialog"
+          aria-modal="true"
+        >
+          <div className="flex flex-col gap-4 px-6 pb-4 pt-3 sm:pt-6">
+            <span className="mx-auto h-1.5 w-16 rounded-full bg-slate-200 sm:hidden" aria-hidden="true" />
             <div className="flex items-center justify-between gap-3">
               <button
                 type="button"
@@ -49,7 +53,7 @@ export function PhotoGalleryModal({
               </button>
             </div>
           </div>
-          <div className="max-h-[70vh] overflow-y-auto px-6 pb-6">
+          <div className="max-h-[70vh] overflow-y-auto px-6 pb-6 sm:max-h-none sm:pb-6">
             <div className="grid grid-cols-3 gap-3">
               {images.map((image) => {
                 const isSelected = selectedImage === image.src;
