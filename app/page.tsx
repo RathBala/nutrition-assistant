@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
 import type { User } from "firebase/auth";
 import { FirebaseError } from "firebase/app";
@@ -22,6 +22,9 @@ import { AuthLoadingScreen } from "@/components/auth/auth-loading-screen";
 import { AppShell } from "@/components/app-shell";
 import { useAuth } from "@/components/auth-provider";
 import { useSignOutAction } from "@/hooks/use-sign-out-action";
+import { LogMealDetailsModal } from "@/components/log-meal-details-modal";
+import { useMealSlots } from "@/hooks/use-meal-slots";
+import { logMealEntry } from "@/lib/firestore/meal-logs";
 
 const todayMacros: MacroBreakdown = {
   calories: 1480,
@@ -114,6 +117,29 @@ const dailyTargets: DailyTarget[] = [
   },
 ];
 
+const SAVE_MEAL_ERROR_MESSAGE = "We couldn’t save your meal. Please try again.";
+
+const deriveMealNameFromFile = (fileName: string | null | undefined): string => {
+  if (!fileName) {
+    return "";
+  }
+
+  const withoutExtension = fileName.replace(/\.[^/.]+$/, "");
+  const normalized = withoutExtension
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!normalized) {
+    return "";
+  }
+
+  return normalized
+    .split(" ")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+};
+
 export default function Home() {
   const { user, loading: authLoading, signOut: signOutUser } = useAuth();
   const {
@@ -165,11 +191,32 @@ function Dashboard({
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [lastUploadResult, setLastUploadResult] = useState<MealImageUploadResult | null>(null);
+  const [pendingMealSelection, setPendingMealSelection] = useState<GallerySelection | null>(null);
+  const [pendingUploadResult, setPendingUploadResult] = useState<MealImageUploadResult | null>(null);
+  const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+  const [isSavingMeal, setIsSavingMeal] = useState(false);
+  const [mealSaveError, setMealSaveError] = useState<string | null>(null);
   const uploadTaskRef = useRef<UploadTask | null>(null);
   const pendingSelectionRef = useRef<GallerySelection | null>(null);
   const isMountedRef = useRef(true);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const cameraInputRef = useRef<HTMLInputElement | null>(null);
+  const { slots: mealSlots, loading: mealSlotsLoading } = useMealSlots(user.uid);
+
+  const clearPendingMealState = useCallback(() => {
+    setIsDetailsOpen(false);
+    setIsSavingMeal(false);
+    setMealSaveError(null);
+    setPendingUploadResult(null);
+    setPendingMealSelection((current) => {
+      if (current) {
+        URL.revokeObjectURL(current.previewUrl);
+      }
+
+      return null;
+    });
+    pendingSelectionRef.current = null;
+  }, []);
 
   const revokePreviews = useCallback((items: GallerySelection[]) => {
     items.forEach((item) => {
@@ -210,6 +257,14 @@ function Dashboard({
       revokePreviews(gallerySelections);
     };
   }, [gallerySelections, revokePreviews]);
+
+  useEffect(() => {
+    return () => {
+      if (pendingMealSelection) {
+        URL.revokeObjectURL(pendingMealSelection.previewUrl);
+      }
+    };
+  }, [pendingMealSelection]);
 
   useEffect(() => {
     if (gallerySelections.length === 0) {
@@ -258,20 +313,32 @@ function Dashboard({
   }, []);
 
   const handleOpenGallery = useCallback(() => {
+    clearPendingMealState();
     setSelectedImageId(null);
     setUploadError(null);
     setShowSuccess(false);
     setUploadProgress(null);
     openFilePicker();
-  }, [openFilePicker]);
+  }, [clearPendingMealState, openFilePicker]);
 
   const handleCaptureMeal = useCallback(() => {
+    clearPendingMealState();
     setSelectedImageId(null);
     setUploadError(null);
     setShowSuccess(false);
     setUploadProgress(null);
     openCameraPicker();
-  }, [openCameraPicker]);
+  }, [clearPendingMealState, openCameraPicker]);
+
+  const pendingMealDefaultName = useMemo(
+    () => deriveMealNameFromFile(pendingMealSelection?.name),
+    [pendingMealSelection],
+  );
+  const pendingMealPreviewUrl = pendingMealSelection?.previewUrl ?? null;
+  const pendingMealFileName = pendingMealSelection?.name ?? null;
+  const shouldShowMealDetailsModal = Boolean(
+    isDetailsOpen && pendingMealSelection && pendingUploadResult,
+  );
 
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
@@ -341,6 +408,13 @@ function Dashboard({
     setUploadError(null);
     setUploadProgress(0);
     setLastUploadResult(null);
+    setMealSaveError(null);
+    setIsDetailsOpen(false);
+    setPendingUploadResult(null);
+    setPendingMealSelection(null);
+    setIsSavingMeal(false);
+
+    const selectionForUpload = selection;
 
     const { task, completion } = startMealImageUpload(user.uid, file, (progress) => {
       if (isMountedRef.current) {
@@ -357,14 +431,18 @@ function Dashboard({
         }
 
         setIsUploading(false);
-        setShowSuccess(true);
         setUploadProgress(null);
         setUploadError(null);
-        setLastUploadResult(result);
         setSelectedImageId(null);
+        setPendingMealSelection(selectionForUpload);
+        setPendingUploadResult(result);
+        setIsDetailsOpen(true);
+        setMealSaveError(null);
+        setShowSuccess(false);
+        setLastUploadResult(result);
 
         setGallerySelections((previous) => {
-          revokePreviews(previous);
+          revokePreviews(previous.filter((item) => item.id !== selectionForUpload.id));
           return [];
         });
 
@@ -393,6 +471,7 @@ function Dashboard({
   };
 
   const handleRetryUpload = () => {
+    clearPendingMealState();
     setUploadError(null);
     setShowSuccess(false);
     setUploadProgress(null);
@@ -412,6 +491,50 @@ function Dashboard({
 
     openFilePicker();
   };
+
+  const handleDismissDetails = useCallback(() => {
+    clearPendingMealState();
+  }, [clearPendingMealState]);
+
+  const handleSubmitMealDetails = useCallback(
+    async ({ name, slotId, slotName }: { name: string; slotId: string; slotName: string }) => {
+      if (!pendingUploadResult || !pendingMealSelection) {
+        return;
+      }
+
+      setIsSavingMeal(true);
+      setMealSaveError(null);
+
+      try {
+        const savedDocRef = await logMealEntry(user.uid, {
+          name,
+          slot: { id: slotId, name: slotName },
+          image: pendingUploadResult,
+          sourceFileName: pendingMealSelection.name,
+        });
+
+        if (!isMountedRef.current) {
+          return;
+        }
+
+        const uploadResult = pendingUploadResult;
+        clearPendingMealState();
+        setLastUploadResult(uploadResult);
+        setShowSuccess(true);
+        console.info("Meal entry saved", savedDocRef.id);
+      } catch (error) {
+        console.error("Failed to save meal entry", error);
+
+        if (!isMountedRef.current) {
+          return;
+        }
+
+        setIsSavingMeal(false);
+        setMealSaveError(SAVE_MEAL_ERROR_MESSAGE);
+      }
+    },
+    [clearPendingMealState, pendingMealSelection, pendingUploadResult, user.uid],
+  );
 
   const handleCloseGallery = () => {
     setIsGalleryOpen(false);
@@ -498,6 +621,18 @@ function Dashboard({
         onConfirm={handleConfirmUpload}
         onClose={handleCloseGallery}
         onBrowseMore={openFilePicker}
+      />
+      <LogMealDetailsModal
+        isOpen={shouldShowMealDetailsModal}
+        previewUrl={pendingMealPreviewUrl}
+        fileName={pendingMealFileName}
+        initialName={pendingMealDefaultName}
+        slots={mealSlots}
+        isLoadingSlots={mealSlotsLoading}
+        isSaving={isSavingMeal}
+        error={mealSaveError}
+        onCancel={handleDismissDetails}
+        onConfirm={handleSubmitMealDetails}
       />
     </AppShell>
   );
