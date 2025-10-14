@@ -62,7 +62,7 @@ export function UploadFeedback({
         <div className="flex flex-col gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 shadow-sm sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
             <CheckCircle2 className="h-5 w-5" aria-hidden="true" />
-            <span className="font-medium">Meal photo uploaded! We’ll analyze it shortly.</span>
+            <span className="font-medium">Meal saved! We’ll analyze it shortly.</span>
           </div>
           {result ? (
             <a
@@ -71,7 +71,7 @@ export function UploadFeedback({
               rel="noopener noreferrer"
               className="self-start rounded-full bg-emerald-600 px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-emerald-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700"
             >
-              Open image
+              View meal photo
             </a>
           ) : null}
         </div>
