@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
 import type { User } from "firebase/auth";
+import { FirebaseError } from "firebase/app";
+import type { UploadTask } from "firebase/storage";
 
 import { AiRecap } from "@/components/ai-recap";
 import { DailyTargetsCard } from "@/components/daily-targets-card";
@@ -14,6 +16,7 @@ import { PhotoGalleryModal } from "@/components/photo-gallery-modal";
 import { QuickAdd } from "@/components/quick-add";
 import { UploadFeedback } from "@/components/upload-feedback";
 import type { GallerySelection, MacroBreakdown, MealEntry } from "@/components/types";
+import { startMealImageUpload, type MealImageUploadResult } from "@/lib/firebase/storage";
 import { AuthScreen } from "@/components/auth/auth-screen";
 import { useAuth } from "@/components/auth-provider";
 
@@ -171,7 +174,12 @@ function Dashboard({
   const [isUploading, setIsUploading] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [gallerySelections, setGallerySelections] = useState<GallerySelection[]>([]);
-  const uploadTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [lastUploadResult, setLastUploadResult] = useState<MealImageUploadResult | null>(null);
+  const uploadTaskRef = useRef<UploadTask | null>(null);
+  const pendingSelectionRef = useRef<GallerySelection | null>(null);
+  const isMountedRef = useRef(true);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const cameraInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -192,9 +200,19 @@ function Dashboard({
   }, [showSuccess]);
 
   useEffect(() => {
+    isMountedRef.current = true;
+
     return () => {
-      if (uploadTimeoutRef.current) {
-        clearTimeout(uploadTimeoutRef.current);
+      isMountedRef.current = false;
+
+      if (uploadTaskRef.current) {
+        uploadTaskRef.current.cancel();
+        uploadTaskRef.current = null;
+      }
+
+      if (pendingSelectionRef.current) {
+        URL.revokeObjectURL(pendingSelectionRef.current.previewUrl);
+        pendingSelectionRef.current = null;
       }
     };
   }, []);
@@ -218,6 +236,31 @@ function Dashboard({
     }
   }, [gallerySelections, selectedImageId]);
 
+  const describeUploadError = useCallback((error: unknown): string => {
+    if (error instanceof FirebaseError) {
+      switch (error.code) {
+        case "storage/unauthorized":
+        case "storage/unauthenticated":
+          return "You don’t have permission to upload images right now. Please sign in again.";
+        case "storage/quota-exceeded":
+          return "We’ve hit our storage limit. Please try again in a little while.";
+        case "storage/retry-limit-exceeded":
+        case "storage/network-request-failed":
+          return "The upload kept failing due to a network issue. Check your connection and try again.";
+        case "storage/invalid-checksum":
+          return "The upload looked corrupted. Try with a fresh photo.";
+        case "storage/invalid-argument":
+          return "That file type isn’t supported for uploads.";
+        case "storage/unknown":
+          return "Something unexpected happened on the server. Please try again.";
+        default:
+          return "Something went wrong while uploading. Please try again.";
+      }
+    }
+
+    return "Something went wrong while uploading. Please try again.";
+  }, []);
+
   const openFilePicker = useCallback(() => {
     fileInputRef.current?.click();
   }, []);
@@ -228,11 +271,17 @@ function Dashboard({
 
   const handleOpenGallery = useCallback(() => {
     setSelectedImageId(null);
+    setUploadError(null);
+    setShowSuccess(false);
+    setUploadProgress(null);
     openFilePicker();
   }, [openFilePicker]);
 
   const handleCaptureMeal = useCallback(() => {
     setSelectedImageId(null);
+    setUploadError(null);
+    setShowSuccess(false);
+    setUploadProgress(null);
     openCameraPicker();
   }, [openCameraPicker]);
 
@@ -250,12 +299,27 @@ function Dashboard({
       return;
     }
 
+    if (uploadTaskRef.current) {
+      uploadTaskRef.current.cancel();
+      uploadTaskRef.current = null;
+    }
+
+    if (isUploading) {
+      setIsUploading(false);
+    }
+
     const nextSelections = Array.from(files).map((file, index) => ({
       id: `${file.name}-${file.lastModified}-${index}`,
       file,
       previewUrl: URL.createObjectURL(file),
       name: file.name,
     }));
+
+    pendingSelectionRef.current = null;
+    setLastUploadResult(null);
+    setUploadProgress(null);
+    setUploadError(null);
+    setShowSuccess(false);
 
     setGallerySelections((previous) => {
       revokePreviews(previous);
@@ -277,30 +341,96 @@ function Dashboard({
       return;
     }
 
+    if (uploadTaskRef.current) {
+      uploadTaskRef.current.cancel();
+      uploadTaskRef.current = null;
+    }
+
+    pendingSelectionRef.current = selection;
     setIsGalleryOpen(false);
     setIsUploading(true);
     setShowSuccess(false);
+    setUploadError(null);
+    setUploadProgress(0);
+    setLastUploadResult(null);
 
-    if (uploadTimeoutRef.current) {
-      clearTimeout(uploadTimeoutRef.current);
+    const { task, completion } = startMealImageUpload(user.uid, file, (progress) => {
+      if (isMountedRef.current) {
+        setUploadProgress(progress);
+      }
+    });
+
+    uploadTaskRef.current = task;
+
+    completion
+      .then((result) => {
+        if (!isMountedRef.current) {
+          return;
+        }
+
+        setIsUploading(false);
+        setShowSuccess(true);
+        setUploadProgress(null);
+        setUploadError(null);
+        setLastUploadResult(result);
+        setSelectedImageId(null);
+
+        setGallerySelections((previous) => {
+          revokePreviews(previous);
+          return [];
+        });
+
+        pendingSelectionRef.current = null;
+
+        console.info("Meal image uploaded", result);
+      })
+      .catch((error) => {
+        if (!isMountedRef.current) {
+          return;
+        }
+
+        setIsUploading(false);
+        setUploadProgress(null);
+        setShowSuccess(false);
+
+        if (error instanceof FirebaseError && error.code === "storage/canceled") {
+          return;
+        }
+
+        setUploadError(describeUploadError(error));
+      })
+      .finally(() => {
+        uploadTaskRef.current = null;
+      });
+  };
+
+  const handleRetryUpload = () => {
+    setUploadError(null);
+    setShowSuccess(false);
+    setUploadProgress(null);
+
+    if (gallerySelections.length > 0) {
+      setIsGalleryOpen(true);
+      return;
     }
 
-    uploadTimeoutRef.current = setTimeout(() => {
-      setIsUploading(false);
-      setShowSuccess(true);
-      uploadTimeoutRef.current = null;
-    }, 1200);
+    if (pendingSelectionRef.current) {
+      const selection = pendingSelectionRef.current;
+      setGallerySelections([selection]);
+      setSelectedImageId(selection.id);
+      setIsGalleryOpen(true);
+      return;
+    }
 
-    setSelectedImageId(null);
-    setGallerySelections((previous) => {
-      revokePreviews(previous);
-      return [];
-    });
+    openFilePicker();
   };
 
   const handleCloseGallery = () => {
     setIsGalleryOpen(false);
     setSelectedImageId(null);
+    setUploadError(null);
+    setUploadProgress(null);
+    pendingSelectionRef.current = null;
     setGallerySelections((previous) => {
       revokePreviews(previous);
       return [];
@@ -366,7 +496,14 @@ function Dashboard({
       </header>
 
       <main className="mx-auto flex max-w-6xl flex-col gap-8 px-4 pb-16 pt-10 sm:px-6 lg:px-8">
-        <UploadFeedback isUploading={isUploading} showSuccess={showSuccess} />
+        <UploadFeedback
+          isUploading={isUploading}
+          showSuccess={showSuccess}
+          progress={uploadProgress}
+          error={uploadError}
+          onRetry={handleRetryUpload}
+          result={lastUploadResult}
+        />
 
         {signOutError ? (
           <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert" aria-live="assertive">
