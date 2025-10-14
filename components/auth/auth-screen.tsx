@@ -45,10 +45,10 @@ export function AuthScreen() {
   const isSignUp = mode === "signUp";
   const isPasswordLongEnough = formState.password.length >= 8;
 
-  const welcomeHeading = isSignUp ? "Create your account" : "Welcome back";
+  const welcomeHeading = isSignUp ? "Join Thrive" : "Welcome back to Thrive";
   const welcomeDescription = isSignUp
-    ? "Stay accountable with a simple food journal, daily targets, and encouraging feedback tailored to you."
-    : "Sign in to continue tracking your meals, macros, and personalized coaching insights.";
+    ? "Set up your Thrive nutrition assistant to stay accountable with a simple food journal, daily targets, and encouraging feedback tailored to you."
+    : "Sign in to Thrive to continue tracking your meals, macros, and personalized coaching insights with your nutrition assistant.";
 
   const toggleMode = () => {
     setFormState({ ...initialFormState, email: formState.email });
@@ -168,7 +168,7 @@ export function AuthScreen() {
       <div className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-8 shadow-xl shadow-slate-900/5">
         <div className="mb-8 space-y-2 text-center">
           <span className="inline-flex items-center justify-center rounded-full bg-emerald-100 px-3 py-1 text-xs font-medium uppercase tracking-[0.3em] text-emerald-700">
-            Nutrition Assistant
+            Thrive
           </span>
           <h1 className="text-2xl font-semibold text-slate-900 sm:text-3xl">{welcomeHeading}</h1>
           <p className="text-sm text-slate-600">{welcomeDescription}</p>
@@ -296,7 +296,7 @@ export function AuthScreen() {
             </p>
           ) : (
             <p>
-              New to Nutrition Assistant?{" "}
+              New to Thrive&rsquo;s nutrition assistant?{" "}
               <button
                 type="button"
                 onClick={toggleMode}
