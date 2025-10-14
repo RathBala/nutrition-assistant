@@ -12,7 +12,7 @@ import type { DailyTarget } from "@/components/daily-targets-card";
 import { MacroSummary } from "@/components/macro-summary";
 import { MealCard } from "@/components/meal-card";
 import { PageHeader } from "@/components/page-header";
-import { PhotoGalleryModal } from "@/components/photo-gallery-modal";
+import { PhotoGalleryModal, type MealDetailsSubmitPayload } from "@/components/photo-gallery-modal";
 import { QuickAdd } from "@/components/quick-add";
 import { UploadFeedback } from "@/components/upload-feedback";
 import type { GallerySelection, MacroBreakdown, MealEntry } from "@/components/types";
@@ -22,6 +22,8 @@ import { AuthLoadingScreen } from "@/components/auth/auth-loading-screen";
 import { AppShell } from "@/components/app-shell";
 import { useAuth } from "@/components/auth-provider";
 import { useSignOutAction } from "@/hooks/use-sign-out-action";
+import { useMealSlots } from "@/hooks/use-meal-slots";
+import { logMealEntry } from "@/lib/firestore/meal-logs";
 
 const todayMacros: MacroBreakdown = {
   calories: 1480,
@@ -114,6 +116,15 @@ const dailyTargets: DailyTarget[] = [
   },
 ];
 
+const SAVE_MEAL_ERROR_MESSAGE = "We couldn’t save your meal. Please try again.";
+
+type PendingMealDetails = {
+  name: string;
+  slotId: string;
+  slotName: string;
+  sourceFileName: string;
+};
+
 export default function Home() {
   const { user, loading: authLoading, signOut: signOutUser } = useAuth();
   const {
@@ -165,11 +176,30 @@ function Dashboard({
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [lastUploadResult, setLastUploadResult] = useState<MealImageUploadResult | null>(null);
+  const [pendingMealDetails, setPendingMealDetails] = useState<PendingMealDetails | null>(null);
+  const [pendingUploadResult, setPendingUploadResult] = useState<MealImageUploadResult | null>(null);
+  const [isSavingMeal, setIsSavingMeal] = useState(false);
+  const [mealSaveError, setMealSaveError] = useState<string | null>(null);
+  const [feedbackErrorTitle, setFeedbackErrorTitle] = useState<string | null>(null);
   const uploadTaskRef = useRef<UploadTask | null>(null);
   const pendingSelectionRef = useRef<GallerySelection | null>(null);
   const isMountedRef = useRef(true);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const cameraInputRef = useRef<HTMLInputElement | null>(null);
+  const { slots: mealSlots, loading: mealSlotsLoading } = useMealSlots(user.uid);
+
+  const clearPendingMealState = useCallback(() => {
+    setIsSavingMeal(false);
+    setMealSaveError(null);
+    setPendingUploadResult(null);
+    setPendingMealDetails(null);
+    setFeedbackErrorTitle(null);
+
+    if (pendingSelectionRef.current) {
+      URL.revokeObjectURL(pendingSelectionRef.current.previewUrl);
+      pendingSelectionRef.current = null;
+    }
+  }, []);
 
   const revokePreviews = useCallback((items: GallerySelection[]) => {
     items.forEach((item) => {
@@ -258,20 +288,22 @@ function Dashboard({
   }, []);
 
   const handleOpenGallery = useCallback(() => {
+    clearPendingMealState();
     setSelectedImageId(null);
     setUploadError(null);
     setShowSuccess(false);
     setUploadProgress(null);
     openFilePicker();
-  }, [openFilePicker]);
+  }, [clearPendingMealState, openFilePicker]);
 
   const handleCaptureMeal = useCallback(() => {
+    clearPendingMealState();
     setSelectedImageId(null);
     setUploadError(null);
     setShowSuccess(false);
     setUploadProgress(null);
     openCameraPicker();
-  }, [openCameraPicker]);
+  }, [clearPendingMealState, openCameraPicker]);
 
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
@@ -308,6 +340,11 @@ function Dashboard({
     setUploadProgress(null);
     setUploadError(null);
     setShowSuccess(false);
+    setPendingMealDetails(null);
+    setPendingUploadResult(null);
+    setMealSaveError(null);
+    setFeedbackErrorTitle(null);
+    setIsSavingMeal(false);
 
     setGallerySelections((previous) => {
       revokePreviews(previous);
@@ -324,78 +361,162 @@ function Dashboard({
     setSelectedImageId(imageId);
   };
 
-  const handleConfirmUpload = (file: File, selection: GallerySelection) => {
-    if (!file || !selection) {
+  const attemptSaveMeal = useCallback(
+    async (
+      uploadResult: MealImageUploadResult,
+      overrideDetails?: PendingMealDetails | null,
+    ) => {
+      const details = overrideDetails ?? pendingMealDetails;
+
+      if (!details) {
+        return;
+      }
+
+      setIsSavingMeal(true);
+      setMealSaveError(null);
+      setUploadError(null);
+      setFeedbackErrorTitle(null);
+
+      try {
+        const savedDocRef = await logMealEntry(user.uid, {
+          name: details.name,
+          slot: { id: details.slotId, name: details.slotName },
+          image: uploadResult,
+          sourceFileName: details.sourceFileName,
+        });
+
+        if (!isMountedRef.current) {
+          return;
+        }
+
+        clearPendingMealState();
+        setLastUploadResult(uploadResult);
+        setShowSuccess(true);
+        console.info("Meal entry saved", savedDocRef.id);
+      } catch (error) {
+        console.error("Failed to save meal entry", error);
+
+        if (!isMountedRef.current) {
+          return;
+        }
+
+        setIsSavingMeal(false);
+        setMealSaveError(SAVE_MEAL_ERROR_MESSAGE);
+        setUploadError(SAVE_MEAL_ERROR_MESSAGE);
+        setFeedbackErrorTitle("We couldn’t save your meal.");
+      }
+    },
+    [clearPendingMealState, pendingMealDetails, user.uid],
+  );
+
+  const startUploadForSelection = useCallback(
+    (selection: GallerySelection, details: PendingMealDetails) => {
+      if (uploadTaskRef.current) {
+        uploadTaskRef.current.cancel();
+        uploadTaskRef.current = null;
+      }
+
+      pendingSelectionRef.current = selection;
+      setPendingMealDetails(details);
+      setIsGalleryOpen(false);
+      setIsUploading(true);
+      setShowSuccess(false);
+      setUploadError(null);
+      setFeedbackErrorTitle(null);
+      setUploadProgress(0);
+      setLastUploadResult(null);
+      setMealSaveError(null);
+      setIsSavingMeal(false);
+      setPendingUploadResult(null);
+
+      const { task, completion } = startMealImageUpload(user.uid, selection.file, (progress) => {
+        if (isMountedRef.current) {
+          setUploadProgress(progress);
+        }
+      });
+
+      uploadTaskRef.current = task;
+
+      completion
+        .then((result) => {
+          if (!isMountedRef.current) {
+            return;
+          }
+
+          setIsUploading(false);
+          setUploadProgress(null);
+          setUploadError(null);
+          setSelectedImageId(null);
+          setPendingUploadResult(result);
+          setLastUploadResult(result);
+
+          setGallerySelections((previous) => {
+            revokePreviews(previous.filter((item) => item.id !== selection.id));
+            return [];
+          });
+
+          attemptSaveMeal(result, details);
+          console.info("Meal image uploaded", result);
+        })
+        .catch((error) => {
+          if (!isMountedRef.current) {
+            return;
+          }
+
+          setIsUploading(false);
+          setUploadProgress(null);
+          setShowSuccess(false);
+
+          if (error instanceof FirebaseError && error.code === "storage/canceled") {
+            return;
+          }
+
+          const describedError = describeUploadError(error);
+          setUploadError(describedError);
+          setFeedbackErrorTitle("We couldn’t upload your meal photo.");
+        })
+        .finally(() => {
+          uploadTaskRef.current = null;
+        });
+    },
+    [attemptSaveMeal, describeUploadError, revokePreviews, user.uid],
+  );
+
+  const handleSubmitMealFromModal = useCallback(
+    ({ selection, name, slotId, slotName }: MealDetailsSubmitPayload) => {
+      const details: PendingMealDetails = {
+        name,
+        slotId,
+        slotName,
+        sourceFileName: selection.name,
+      };
+
+      setSelectedImageId(null);
+      setGallerySelections((previous) => {
+        revokePreviews(previous.filter((item) => item.id !== selection.id));
+        return [];
+      });
+
+      startUploadForSelection(selection, details);
+    },
+    [revokePreviews, startUploadForSelection],
+  );
+
+  const handleRetryFlow = useCallback(() => {
+    if (mealSaveError && pendingUploadResult && pendingMealDetails) {
+      setMealSaveError(null);
+      setUploadError(null);
+      setFeedbackErrorTitle(null);
+      attemptSaveMeal(pendingUploadResult, pendingMealDetails);
       return;
     }
 
-    if (uploadTaskRef.current) {
-      uploadTaskRef.current.cancel();
-      uploadTaskRef.current = null;
+    if (uploadError && pendingSelectionRef.current && pendingMealDetails) {
+      setUploadError(null);
+      setFeedbackErrorTitle(null);
+      startUploadForSelection(pendingSelectionRef.current, pendingMealDetails);
+      return;
     }
-
-    pendingSelectionRef.current = selection;
-    setIsGalleryOpen(false);
-    setIsUploading(true);
-    setShowSuccess(false);
-    setUploadError(null);
-    setUploadProgress(0);
-    setLastUploadResult(null);
-
-    const { task, completion } = startMealImageUpload(user.uid, file, (progress) => {
-      if (isMountedRef.current) {
-        setUploadProgress(progress);
-      }
-    });
-
-    uploadTaskRef.current = task;
-
-    completion
-      .then((result) => {
-        if (!isMountedRef.current) {
-          return;
-        }
-
-        setIsUploading(false);
-        setShowSuccess(true);
-        setUploadProgress(null);
-        setUploadError(null);
-        setLastUploadResult(result);
-        setSelectedImageId(null);
-
-        setGallerySelections((previous) => {
-          revokePreviews(previous);
-          return [];
-        });
-
-        pendingSelectionRef.current = null;
-
-        console.info("Meal image uploaded", result);
-      })
-      .catch((error) => {
-        if (!isMountedRef.current) {
-          return;
-        }
-
-        setIsUploading(false);
-        setUploadProgress(null);
-        setShowSuccess(false);
-
-        if (error instanceof FirebaseError && error.code === "storage/canceled") {
-          return;
-        }
-
-        setUploadError(describeUploadError(error));
-      })
-      .finally(() => {
-        uploadTaskRef.current = null;
-      });
-  };
-
-  const handleRetryUpload = () => {
-    setUploadError(null);
-    setShowSuccess(false);
-    setUploadProgress(null);
 
     if (gallerySelections.length > 0) {
       setIsGalleryOpen(true);
@@ -410,15 +531,26 @@ function Dashboard({
       return;
     }
 
+    clearPendingMealState();
     openFilePicker();
-  };
+  }, [
+    attemptSaveMeal,
+    clearPendingMealState,
+    gallerySelections,
+    mealSaveError,
+    openFilePicker,
+    pendingMealDetails,
+    pendingUploadResult,
+    startUploadForSelection,
+    uploadError,
+  ]);
 
   const handleCloseGallery = () => {
+    clearPendingMealState();
     setIsGalleryOpen(false);
     setSelectedImageId(null);
     setUploadError(null);
     setUploadProgress(null);
-    pendingSelectionRef.current = null;
     setGallerySelections((previous) => {
       revokePreviews(previous);
       return [];
@@ -429,10 +561,12 @@ function Dashboard({
     <AppShell user={user} onSignOut={onSignOut} signOutPending={signOutPending}>
       <UploadFeedback
         isUploading={isUploading}
+        isSaving={isSavingMeal}
         showSuccess={showSuccess}
         progress={uploadProgress}
+        errorTitle={feedbackErrorTitle}
         error={uploadError}
-        onRetry={handleRetryUpload}
+        onRetry={handleRetryFlow}
         result={lastUploadResult}
       />
 
@@ -495,9 +629,11 @@ function Dashboard({
         images={gallerySelections}
         selectedImageId={selectedImageId}
         onSelectImage={handleSelectImage}
-        onConfirm={handleConfirmUpload}
+        onSubmit={handleSubmitMealFromModal}
         onClose={handleCloseGallery}
         onBrowseMore={openFilePicker}
+        slots={mealSlots}
+        isLoadingSlots={mealSlotsLoading}
       />
     </AppShell>
   );
