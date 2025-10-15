@@ -6,7 +6,7 @@ import type { ReactNode } from "react";
 import type { User } from "firebase/auth";
 
 const DEFAULT_CONTENT_CLASSNAME =
-  "mx-auto flex max-w-6xl flex-col gap-8 px-4 pb-16 pt-10 sm:px-6 lg:px-8";
+  "mx-auto flex max-w-6xl flex-col gap-8 px-6 pb-16 pt-10 sm:px-6 lg:px-8";
 
 type AppShellProps = {
   user: User;
@@ -63,7 +63,7 @@ export function AppShell({
   return (
     <>
       <header className="border-b border-slate-200 bg-white/80 py-4 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-white/60">
-        <div className="mx-auto flex max-w-6xl flex-col gap-4 px-4 sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8">
+        <div className="mx-auto flex max-w-6xl flex-col gap-4 px-6 sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-8">
             <Link
               href="/"
