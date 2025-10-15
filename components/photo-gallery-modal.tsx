@@ -102,6 +102,28 @@ export function PhotoGalleryModal({
 
   const hasMultipleImages = images.length > 1;
 
+  useEffect(() => {
+    if (typeof document === "undefined") {
+      return undefined;
+    }
+
+    if (!isOpen) {
+      return undefined;
+    }
+
+    const { body, documentElement } = document;
+    const previousBodyOverflow = body.style.overflow;
+    const previousHtmlOverflow = documentElement.style.overflow;
+
+    body.style.overflow = "hidden";
+    documentElement.style.overflow = "hidden";
+
+    return () => {
+      body.style.overflow = previousBodyOverflow;
+      documentElement.style.overflow = previousHtmlOverflow;
+    };
+  }, [isOpen]);
+
   const handleSubmit = () => {
     const trimmedName = mealName.trim();
 
@@ -135,7 +157,7 @@ export function PhotoGalleryModal({
     <div className="fixed inset-0 z-50 flex bg-slate-900/70 backdrop-blur-sm transition-opacity">
       <div className="flex h-full w-full items-end justify-center sm:items-stretch sm:justify-end">
         <div
-          className="w-full max-h-[92vh] overflow-hidden rounded-t-[32px] border border-slate-200/80 bg-white shadow-2xl animate-sheet-up sm:h-full sm:max-h-none sm:max-w-[420px] sm:rounded-none sm:border-y-0 sm:border-l sm:shadow-xl sm:animate-drawer-in"
+          className="mx-5 my-6 max-h-[92vh] overflow-hidden rounded-t-[32px] border border-slate-200/80 bg-white shadow-2xl animate-sheet-up sm:mx-0 sm:my-0 sm:h-full sm:max-h-none sm:max-w-[420px] sm:rounded-none sm:border-y-0 sm:border-l sm:shadow-xl sm:animate-drawer-in"
           role="dialog"
           aria-modal="true"
           aria-labelledby="add-meal-details-title"
@@ -163,7 +185,7 @@ export function PhotoGalleryModal({
               </button>
             </div>
           </div>
-          <div className="max-h-[80vh] overflow-y-auto px-4 pb-6 sm:px-6 sm:pb-8">
+          <div className="max-h-[80vh] overflow-y-auto overscroll-y-contain px-4 pb-6 sm:px-6 sm:pb-8">
             <div className="space-y-6">
               <div className="space-y-3">
                 <button
