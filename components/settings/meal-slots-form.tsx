@@ -1,7 +1,26 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import type { FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { FormEvent, MutableRefObject } from "react";
+
+import {
+  DndContext,
+  KeyboardSensor,
+  PointerSensor,
+  closestCenter,
+  type DragEndEvent,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  arrayMove,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import { GripVertical } from "lucide-react";
 
 import { useMealSlots } from "@/hooks/use-meal-slots";
 import {
@@ -49,6 +68,14 @@ export function MealSlotsForm({ userId }: MealSlotsFormProps) {
   const [successVisible, setSuccessVisible] = useState(false);
   const inputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const [pendingFocusId, setPendingFocusId] = useState<string | null>(null);
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: 8 },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    }),
+  );
 
   const sanitizedEditableSlots = useMemo(
     () =>
@@ -285,9 +312,47 @@ export function MealSlotsForm({ userId }: MealSlotsFormProps) {
     }
   }, [saveError]);
 
+  const handleDragEnd = useCallback(
+    (event: DragEndEvent) => {
+      const { active, over } = event;
+
+      if (!over || active.id === over.id) {
+        return;
+      }
+
+      let didChange = false;
+
+      setEditableSlots((previous) => {
+        const oldIndex = previous.findIndex((slot) => slot.id === active.id);
+        const newIndex = previous.findIndex((slot) => slot.id === over.id);
+
+        if (oldIndex === -1 || newIndex === -1 || oldIndex === newIndex) {
+          return previous;
+        }
+
+        didChange = true;
+        return arrayMove(previous, oldIndex, newIndex);
+      });
+
+      if (!didChange) {
+        return;
+      }
+
+      if (saveError) {
+        clearSaveError();
+      }
+
+      if (successVisible) {
+        setSuccessVisible(false);
+      }
+    },
+    [clearSaveError, saveError, successVisible],
+  );
+
   const showLoadingState = !hasHydrated && loading;
   const disableSave = loading || saving || !isDirty || hasValidationErrors;
   const disableDiscard = loading || saving || !isDirty;
+  const disableReordering = loading || saving;
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
@@ -334,61 +399,38 @@ export function MealSlotsForm({ userId }: MealSlotsFormProps) {
           ) : null}
 
           <div className="space-y-4">
-            {editableSlots.map((slot, index) => {
-              const slotError = validationMessages.get(slot.id);
-              const showSlotError =
-                !!slotError &&
-                (submitAttempted || touchedSlots[slot.id] || slotError === DUPLICATE_ERROR_MESSAGE);
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleDragEnd}
+            >
+              <SortableContext
+                items={editableSlots.map((slot) => slot.id)}
+                strategy={verticalListSortingStrategy}
+              >
+                {editableSlots.map((slot, index) => {
+                  const slotError = validationMessages.get(slot.id);
+                  const showSlotError =
+                    !!slotError &&
+                    (submitAttempted || touchedSlots[slot.id] || slotError === DUPLICATE_ERROR_MESSAGE);
 
-              return (
-                <div key={slot.id} className="rounded-2xl border border-slate-200 p-4">
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                    <div className="flex-1">
-                      <label htmlFor={`meal-slot-${slot.id}`} className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-                        Meal slot {index + 1}
-                      </label>
-                      <input
-                        ref={(element) => {
-                          if (element) {
-                            inputRefs.current[slot.id] = element;
-                          } else {
-                            delete inputRefs.current[slot.id];
-                          }
-                        }}
-                        id={`meal-slot-${slot.id}`}
-                        type="text"
-                        value={slot.name}
-                        onChange={(event) => handleNameChange(slot.id, event.target.value)}
-                        onBlur={() => handleNameBlur(slot.id)}
-                        disabled={loading || saving}
-                        className={`mt-2 w-full rounded-xl border px-3 py-2 text-sm font-medium text-slate-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 ${
-                          showSlotError
-                            ? "border-red-300 focus:border-red-400 focus:ring-red-400/20"
-                            : "border-slate-200"
-                        } disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500`}
-                        placeholder="Meal slot name"
-                        maxLength={MAX_MEAL_SLOT_NAME_LENGTH + 10}
-                        aria-invalid={showSlotError ? "true" : undefined}
-                        aria-describedby={showSlotError ? `meal-slot-${slot.id}-error` : undefined}
-                      />
-                      {showSlotError ? (
-                        <p id={`meal-slot-${slot.id}-error`} className="mt-2 text-xs font-semibold text-red-600">
-                          {slotError}
-                        </p>
-                      ) : null}
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveSlot(slot.id)}
-                      disabled={loading || saving}
-                      className="inline-flex items-center justify-center rounded-xl border border-slate-200 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-600 transition hover:border-slate-300 hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-400"
-                    >
-                      Remove
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
+                  return (
+                    <SortableMealSlotItem
+                      key={slot.id}
+                      slot={slot}
+                      index={index}
+                      disableInteractions={disableReordering}
+                      slotError={slotError}
+                      showSlotError={showSlotError}
+                      handleNameChange={handleNameChange}
+                      handleNameBlur={handleNameBlur}
+                      handleRemoveSlot={handleRemoveSlot}
+                      inputRefs={inputRefs}
+                    />
+                  );
+                })}
+              </SortableContext>
+            </DndContext>
           </div>
 
           {editableSlots.length === 0 ? (
@@ -434,5 +476,113 @@ export function MealSlotsForm({ userId }: MealSlotsFormProps) {
         </div>
       </div>
     </form>
+  );
+}
+
+type SortableMealSlotItemProps = {
+  slot: EditableSlot;
+  index: number;
+  disableInteractions: boolean;
+  slotError?: string;
+  showSlotError: boolean;
+  handleNameChange: (id: string, value: string) => void;
+  handleNameBlur: (id: string) => void;
+  handleRemoveSlot: (id: string) => void;
+  inputRefs: MutableRefObject<Record<string, HTMLInputElement | null>>;
+};
+
+function SortableMealSlotItem({
+  slot,
+  index,
+  disableInteractions,
+  slotError,
+  showSlotError,
+  handleNameChange,
+  handleNameBlur,
+  handleRemoveSlot,
+  inputRefs,
+}: SortableMealSlotItemProps) {
+  const { attributes, listeners, setActivatorNodeRef, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: slot.id,
+    disabled: disableInteractions,
+  });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isDragging ? 10 : undefined,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`rounded-2xl border border-slate-200 bg-white p-4 transition ${
+        isDragging ? "shadow-lg ring-1 ring-emerald-300" : ""
+      }`}
+    >
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex items-start gap-3 sm:flex-1">
+          <button
+            type="button"
+            ref={setActivatorNodeRef}
+            {...listeners}
+            {...attributes}
+            disabled={disableInteractions}
+            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-slate-400 transition focus:outline-none focus:ring-2 focus:ring-emerald-500/40 ${
+              disableInteractions ? "cursor-not-allowed text-slate-300" : "cursor-grab active:cursor-grabbing hover:text-slate-600"
+            }`}
+            aria-label={`Reorder meal slot ${index + 1}${slot.name ? `, ${slot.name}` : ""}`}
+          >
+            <GripVertical className="h-5 w-5" aria-hidden="true" />
+          </button>
+          <div className="flex-1">
+            <label
+              htmlFor={`meal-slot-${slot.id}`}
+              className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500"
+            >
+              Meal slot {index + 1}
+            </label>
+            <input
+              ref={(element) => {
+                if (element) {
+                  inputRefs.current[slot.id] = element;
+                } else {
+                  delete inputRefs.current[slot.id];
+                }
+              }}
+              id={`meal-slot-${slot.id}`}
+              type="text"
+              value={slot.name}
+              onChange={(event) => handleNameChange(slot.id, event.target.value)}
+              onBlur={() => handleNameBlur(slot.id)}
+              disabled={disableInteractions}
+              className={`mt-2 w-full rounded-xl border px-3 py-2 text-sm font-medium text-slate-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 ${
+                showSlotError
+                  ? "border-red-300 focus:border-red-400 focus:ring-red-400/20"
+                  : "border-slate-200"
+              } disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500`}
+              placeholder="Meal slot name"
+              maxLength={MAX_MEAL_SLOT_NAME_LENGTH + 10}
+              aria-invalid={showSlotError ? "true" : undefined}
+              aria-describedby={showSlotError ? `meal-slot-${slot.id}-error` : undefined}
+            />
+            {showSlotError ? (
+              <p id={`meal-slot-${slot.id}-error`} className="mt-2 text-xs font-semibold text-red-600">
+                {slotError}
+              </p>
+            ) : null}
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={() => handleRemoveSlot(slot.id)}
+          disabled={disableInteractions}
+          className="inline-flex items-center justify-center rounded-xl border border-slate-200 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-600 transition hover:border-slate-300 hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-400"
+        >
+          Remove
+        </button>
+      </div>
+    </div>
   );
 }
