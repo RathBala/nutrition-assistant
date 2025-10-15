@@ -11,6 +11,7 @@ import { DailyTargetsCard } from "@/components/daily-targets-card";
 import type { DailyTarget } from "@/components/daily-targets-card";
 import { MacroSummary } from "@/components/macro-summary";
 import { PageHeader } from "@/components/page-header";
+import { LogMealFab } from "@/components/log-meal-fab";
 import { MealDetailsModal, type MealDetailsSubmitPayload } from "@/components/meal-details-modal";
 import { QuickAdd } from "@/components/quick-add";
 import { UploadFeedback } from "@/components/upload-feedback";
@@ -633,7 +634,6 @@ function Dashboard({
         eyebrow="Nutrition Assistant"
         title="Your meals for Tuesday, June 4"
         description="Upload photos of what you eat and get instant calorie estimates, macro breakdowns, and gentle coaching from your AI companion."
-        onLogMeal={handleOpenMealDetails}
       />
 
       <QuickAdd onCapture={handleCaptureMeal} onUpload={handleUploadFromGallery} />
@@ -684,6 +684,7 @@ function Dashboard({
         slots={mealSlots}
         isLoadingSlots={mealSlotsLoading}
       />
+      <LogMealFab onClick={handleOpenMealDetails} />
     </AppShell>
   );
 }
