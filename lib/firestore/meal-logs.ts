@@ -16,20 +16,20 @@ export type MealLogSlot = {
   name: string;
 };
 
-export type MealLogImage = MealImageUploadResult;
+export type MealLogImage = MealImageUploadResult | null;
 
 export type MealLogCreateInput = {
   name: string;
   slot: MealLogSlot;
-  image: MealLogImage;
-  sourceFileName: string;
+  image?: MealLogImage;
+  sourceFileName?: string | null;
 };
 
 export type MealLogDocument = {
   name: string;
   slot: MealLogSlot;
   image: MealLogImage;
-  sourceFileName: string;
+  sourceFileName: string | null;
   createdAt: Timestamp | ReturnType<typeof serverTimestamp>;
   updatedAt: Timestamp | ReturnType<typeof serverTimestamp>;
 };
@@ -60,8 +60,8 @@ export const logMealEntry = async (
       id: input.slot.id,
       name: normalizedSlotName || input.slot.name,
     },
-    image: input.image,
-    sourceFileName: input.sourceFileName,
+    image: input.image ?? null,
+    sourceFileName: input.sourceFileName ?? null,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   };
