@@ -12,7 +12,6 @@ import type { DailyTarget } from "@/components/daily-targets-card";
 import { MacroSummary } from "@/components/macro-summary";
 import { PageHeader } from "@/components/page-header";
 import { MealDetailsModal, type MealDetailsSubmitPayload } from "@/components/meal-details-modal";
-import { QuickAdd } from "@/components/quick-add";
 import { UploadFeedback } from "@/components/upload-feedback";
 import type { GallerySelection, MacroBreakdown } from "@/components/types";
 import { startMealImageUpload, type MealImageUploadResult } from "@/lib/firebase/storage";
@@ -127,7 +126,6 @@ function Dashboard({
   const pendingSelectionRef = useRef<GallerySelection | null>(null);
   const isMountedRef = useRef(true);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const cameraInputRef = useRef<HTMLInputElement | null>(null);
   const { slots: mealSlots, loading: mealSlotsLoading } = useMealSlots(user.uid);
   const {
     meals: todayMeals,
@@ -254,12 +252,8 @@ function Dashboard({
     fileInputRef.current?.click();
   }, []);
 
-  const openCameraPicker = useCallback(() => {
-    cameraInputRef.current?.click();
-  }, []);
-
   const beginMealDetails = useCallback(
-    (options?: { openPicker?: "file" | "camera" }) => {
+    (options?: { openPicker?: "file" }) => {
       if (uploadTaskRef.current) {
         uploadTaskRef.current.cancel();
         uploadTaskRef.current = null;
@@ -281,13 +275,10 @@ function Dashboard({
 
       if (options?.openPicker === "file") {
         openFilePicker();
-      } else if (options?.openPicker === "camera") {
-        openCameraPicker();
       }
     },
     [
       clearPendingMealState,
-      openCameraPicker,
       openFilePicker,
       revokePreviews,
     ],
@@ -295,14 +286,6 @@ function Dashboard({
 
   const handleOpenMealDetails = useCallback(() => {
     beginMealDetails();
-  }, [beginMealDetails]);
-
-  const handleUploadFromGallery = useCallback(() => {
-    beginMealDetails({ openPicker: "file" });
-  }, [beginMealDetails]);
-
-  const handleCaptureMeal = useCallback(() => {
-    beginMealDetails({ openPicker: "camera" });
   }, [beginMealDetails]);
 
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
@@ -636,7 +619,6 @@ function Dashboard({
         onLogMeal={handleOpenMealDetails}
       />
 
-      <QuickAdd onCapture={handleCaptureMeal} onUpload={handleUploadFromGallery} />
       <MacroSummary macros={todayMacros} goal={macroGoals} />
 
       <section className="grid gap-6 lg:grid-cols-[1fr_minmax(260px,320px)]">
@@ -663,15 +645,6 @@ function Dashboard({
         className="sr-only"
         onChange={handleFileChange}
       />
-      <input
-        ref={cameraInputRef}
-        type="file"
-        accept="image/*"
-        capture="environment"
-        className="sr-only"
-        onChange={handleFileChange}
-      />
-
       <MealDetailsModal
         isOpen={isGalleryOpen}
         images={gallerySelections}
