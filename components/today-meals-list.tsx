@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { AlertCircle, ImageIcon, RefreshCw } from "lucide-react";
+import type { HTMLAttributes, ReactNode } from "react";
 
 import type { TodayMealLog } from "@/hooks/use-today-meal-logs";
 
@@ -11,6 +12,7 @@ type TodayMealsListProps = {
   error: string | null;
   onRetry: () => void;
   onLogMeal?: () => void;
+  footer?: ReactNode;
 };
 
 const timeFormatter = new Intl.DateTimeFormat("en-US", {
@@ -77,19 +79,18 @@ const LoggedMealCard = ({ meal }: { meal: TodayMealLog }) => (
   </article>
 );
 
-export const TodayMealsList = ({ meals, loading, error, onRetry, onLogMeal }: TodayMealsListProps) => {
-  if (loading) {
-    return (
-      <div className="space-y-5" aria-live="polite" aria-busy="true">
-        <SkeletonCard />
-        <SkeletonCard />
-        <SkeletonCard />
-      </div>
-    );
-  }
+export const TodayMealsList = ({ meals, loading, error, onRetry, onLogMeal, footer }: TodayMealsListProps) => {
+  const containerProps: HTMLAttributes<HTMLDivElement> = {
+    className: "space-y-5",
+    ...(loading ? { "aria-live": "polite" as const, "aria-busy": true } : {}),
+  };
 
-  if (error) {
-    return (
+  let content: ReactNode;
+
+  if (loading) {
+    content = [<SkeletonCard key="skeleton-1" />, <SkeletonCard key="skeleton-2" />, <SkeletonCard key="skeleton-3" />];
+  } else if (error) {
+    content = (
       <div
         role="alert"
         className="space-y-3 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700"
@@ -108,10 +109,8 @@ export const TodayMealsList = ({ meals, loading, error, onRetry, onLogMeal }: To
         </button>
       </div>
     );
-  }
-
-  if (meals.length === 0) {
-    return (
+  } else if (meals.length === 0) {
+    content = (
       <div className="space-y-4 rounded-2xl border border-dashed border-slate-200 bg-white p-6 text-center shadow-sm">
         <h3 className="text-lg font-semibold text-slate-900">No meals logged yet today</h3>
         <p className="text-sm text-slate-600">
@@ -128,13 +127,14 @@ export const TodayMealsList = ({ meals, loading, error, onRetry, onLogMeal }: To
         ) : null}
       </div>
     );
+  } else {
+    content = meals.map((meal) => <LoggedMealCard key={meal.id} meal={meal} />);
   }
 
   return (
-    <div className="space-y-5">
-      {meals.map((meal) => (
-        <LoggedMealCard key={meal.id} meal={meal} />
-      ))}
+    <div {...containerProps}>
+      {content}
+      {footer ? <div>{footer}</div> : null}
     </div>
   );
 };

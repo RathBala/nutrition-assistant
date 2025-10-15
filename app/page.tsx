@@ -637,16 +637,16 @@ function Dashboard({
       />
 
       <QuickAdd onCapture={handleCaptureMeal} onUpload={handleUploadFromGallery} />
-      <MacroSummary macros={todayMacros} goal={macroGoals} />
 
       <section className="grid gap-6 lg:grid-cols-[1fr_minmax(260px,320px)]">
-        <div className="space-y-5">
+        <div>
           <TodayMealsList
             meals={sortedTodayMeals}
             loading={todayMealsLoading}
             error={todayMealsError}
             onRetry={refreshTodayMeals}
             onLogMeal={handleOpenMealDetails}
+            footer={<MacroSummary macros={todayMacros} goal={macroGoals} />}
           />
         </div>
         <div className="space-y-5">
