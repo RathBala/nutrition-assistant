@@ -11,7 +11,7 @@ import { DailyTargetsCard } from "@/components/daily-targets-card";
 import type { DailyTarget } from "@/components/daily-targets-card";
 import { MacroSummary } from "@/components/macro-summary";
 import { PageHeader } from "@/components/page-header";
-import { PhotoGalleryModal, type MealDetailsSubmitPayload } from "@/components/photo-gallery-modal";
+import { MealDetailsModal, type MealDetailsSubmitPayload } from "@/components/meal-details-modal";
 import { QuickAdd } from "@/components/quick-add";
 import { UploadFeedback } from "@/components/upload-feedback";
 import type { GallerySelection, MacroBreakdown } from "@/components/types";
@@ -672,7 +672,7 @@ function Dashboard({
         onChange={handleFileChange}
       />
 
-      <PhotoGalleryModal
+      <MealDetailsModal
         isOpen={isGalleryOpen}
         images={gallerySelections}
         selectedImageId={selectedImageId}
