@@ -10,12 +10,11 @@ import { AiRecap } from "@/components/ai-recap";
 import { DailyTargetsCard } from "@/components/daily-targets-card";
 import type { DailyTarget } from "@/components/daily-targets-card";
 import { MacroSummary } from "@/components/macro-summary";
-import { MealCard } from "@/components/meal-card";
 import { PageHeader } from "@/components/page-header";
 import { PhotoGalleryModal, type MealDetailsSubmitPayload } from "@/components/photo-gallery-modal";
 import { QuickAdd } from "@/components/quick-add";
 import { UploadFeedback } from "@/components/upload-feedback";
-import type { GallerySelection, MacroBreakdown, MealEntry } from "@/components/types";
+import type { GallerySelection, MacroBreakdown } from "@/components/types";
 import { startMealImageUpload, type MealImageUploadResult } from "@/lib/firebase/storage";
 import { AuthScreen } from "@/components/auth/auth-screen";
 import { AuthLoadingScreen } from "@/components/auth/auth-loading-screen";
@@ -24,6 +23,8 @@ import { useAuth } from "@/components/auth-provider";
 import { useSignOutAction } from "@/hooks/use-sign-out-action";
 import { useMealSlots } from "@/hooks/use-meal-slots";
 import { logMealEntry } from "@/lib/firestore/meal-logs";
+import { TodayMealsList } from "@/components/today-meals-list";
+import { useTodayMealLogs } from "@/hooks/use-today-meal-logs";
 
 const todayMacros: MacroBreakdown = {
   calories: 1480,
@@ -38,65 +39,6 @@ const macroGoals: Partial<MacroBreakdown> = {
   carbs: 240,
   fat: 60,
 };
-
-const meals: MealEntry[] = [
-  {
-    id: "breakfast",
-    name: "Greek Yogurt Parfait",
-    time: "8:05 AM",
-    notes: "High-protein yogurt topped with berries, granola, and a drizzle of honey.",
-    imageUrl: "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?auto=format&fit=crop&w=800&q=80",
-    macros: {
-      calories: 420,
-      protein: 32,
-      carbs: 48,
-      fat: 12,
-    },
-    tags: ["Breakfast", "High protein"],
-  },
-  {
-    id: "lunch",
-    name: "Salmon Poke Bowl",
-    time: "12:42 PM",
-    notes: "Wild salmon, sushi rice, cucumber, edamame, and sesame ginger dressing.",
-    imageUrl: "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=800&q=80",
-    macros: {
-      calories: 560,
-      protein: 38,
-      carbs: 62,
-      fat: 18,
-    },
-    tags: ["Lunch", "Omega-3"],
-  },
-  {
-    id: "snack",
-    name: "Matcha Protein Shake",
-    time: "3:15 PM",
-    notes: "Pea protein, almond milk, banana, and matcha powder blended with ice.",
-    imageUrl: "https://images.unsplash.com/photo-1484980859177-5ac1249fda6f?auto=format&fit=crop&w=800&q=80",
-    macros: {
-      calories: 240,
-      protein: 22,
-      carbs: 32,
-      fat: 6,
-    },
-    tags: ["Snack", "On the go"],
-  },
-  {
-    id: "dinner",
-    name: "Lemon Herb Chicken",
-    time: "7:02 PM",
-    notes: "Grilled chicken breast, roasted vegetables, and quinoa.",
-    imageUrl: "https://images.unsplash.com/photo-1466978913421-dad2ebd01d17?auto=format&fit=crop&w=800&q=80",
-    macros: {
-      calories: 260,
-      protein: 30,
-      carbs: 23,
-      fat: 6,
-    },
-    tags: ["Dinner", "Low carb"],
-  },
-];
 
 const aiMessage =
   "Nice balance today! You're 620 calories under your goal, so there's room for a nourishing dessert or a larger dinner. Consider adding leafy greens to boost fiber and keep hydration up this evening.";
@@ -187,6 +129,12 @@ function Dashboard({
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const cameraInputRef = useRef<HTMLInputElement | null>(null);
   const { slots: mealSlots, loading: mealSlotsLoading } = useMealSlots(user.uid);
+  const {
+    meals: todayMeals,
+    loading: todayMealsLoading,
+    error: todayMealsError,
+    refresh: refreshTodayMeals,
+  } = useTodayMealLogs(user.uid);
 
   const clearPendingMealState = useCallback(() => {
     setIsSavingMeal(false);
@@ -442,6 +390,7 @@ function Dashboard({
         clearPendingMealState();
         setLastUploadResult(uploadResult ?? null);
         setShowSuccess(true);
+        refreshTodayMeals();
         console.info("Meal entry saved", savedDocRef.id);
       } catch (error) {
         console.error("Failed to save meal entry", error);
@@ -456,7 +405,7 @@ function Dashboard({
         setFeedbackErrorTitle("We couldn’t save your meal.");
       }
     },
-    [clearPendingMealState, pendingMealDetails, user.uid],
+    [clearPendingMealState, pendingMealDetails, refreshTodayMeals, user.uid],
   );
 
   const startUploadForSelection = useCallback(
@@ -669,9 +618,13 @@ function Dashboard({
 
       <section className="grid gap-6 lg:grid-cols-[1fr_minmax(260px,320px)]">
         <div className="space-y-5">
-          {meals.map((meal) => (
-            <MealCard key={meal.id} meal={meal} />
-          ))}
+          <TodayMealsList
+            meals={todayMeals}
+            loading={todayMealsLoading}
+            error={todayMealsError}
+            onRetry={refreshTodayMeals}
+            onLogMeal={handleOpenMealDetails}
+          />
         </div>
         <div className="space-y-5">
           <AiRecap message={aiMessage} />
