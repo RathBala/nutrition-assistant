@@ -34,7 +34,7 @@ export type MealDetailsSubmitPayload = {
   slotName: string;
 };
 
-export type PhotoGalleryModalProps = {
+export type MealDetailsModalProps = {
   isOpen: boolean;
   images: GallerySelection[];
   selectedImageId: string | null;
@@ -47,7 +47,7 @@ export type PhotoGalleryModalProps = {
   isLoadingSlots: boolean;
 };
 
-export function PhotoGalleryModal({
+export function MealDetailsModal({
   isOpen,
   images,
   selectedImageId,
@@ -58,7 +58,7 @@ export function PhotoGalleryModal({
   onRemoveImage,
   slots,
   isLoadingSlots,
-}: PhotoGalleryModalProps) {
+}: MealDetailsModalProps) {
   const [mealName, setMealName] = useState("");
   const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
 
@@ -140,32 +140,33 @@ export function PhotoGalleryModal({
           aria-modal="true"
           aria-labelledby="add-meal-details-title"
         >
-          <div className="flex flex-col gap-4 px-4 pb-4 pt-3 sm:px-6 sm:pt-6">
-            <span className="mx-auto h-1.5 w-12 rounded-full bg-slate-200 sm:hidden" aria-hidden="true" />
-            <div className="flex items-center justify-between gap-3">
-              <button
-                type="button"
-                onClick={onClose}
-                className="text-sm font-semibold text-slate-500 transition hover:text-slate-900"
-              >
-                Cancel
-              </button>
-              <p id="add-meal-details-title" className="text-sm font-semibold text-slate-900">
-                Add meal details
-              </p>
-              <button
-                type="button"
-                onClick={handleSubmit}
-                disabled={!canSubmit}
-                className="rounded-full bg-brand px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-dark focus:outline-none focus-visible:ring-2 focus-visible:ring-brand disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400"
-              >
-                Save meal
-              </button>
+          <div className="flex h-full flex-col">
+            <div className="flex flex-col gap-5 px-6 pb-5 pt-5 sm:px-8 sm:pb-6 sm:pt-8">
+              <span className="mx-auto h-1.5 w-12 rounded-full bg-slate-200 sm:hidden" aria-hidden="true" />
+              <div className="flex items-center justify-between gap-3">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="text-sm font-semibold text-slate-500 transition hover:text-slate-900"
+                >
+                  Cancel
+                </button>
+                <p id="add-meal-details-title" className="text-sm font-semibold text-slate-900">
+                  Add meal details
+                </p>
+                <button
+                  type="button"
+                  onClick={handleSubmit}
+                  disabled={!canSubmit}
+                  className="rounded-full bg-brand px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-dark focus:outline-none focus-visible:ring-2 focus-visible:ring-brand disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400"
+                >
+                  Save meal
+                </button>
+              </div>
             </div>
-          </div>
-          <div className="max-h-[80vh] overflow-y-auto px-4 pb-6 sm:px-6 sm:pb-8">
-            <div className="space-y-6">
-              <div className="space-y-3">
+            <div className="flex-1 overflow-y-auto px-6 pb-10 pt-1 sm:px-8 sm:pb-12 sm:pt-2">
+              <div className="space-y-6">
+                <div className="space-y-3">
                 <button
                   type="button"
                   onClick={onBrowseMore}
@@ -324,6 +325,7 @@ export function PhotoGalleryModal({
                 </div>
               ) : null}
             </div>
+          </div>
           </div>
         </div>
       </div>
