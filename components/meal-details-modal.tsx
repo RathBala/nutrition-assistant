@@ -69,6 +69,24 @@ export function MealDetailsModal({
     }
   }, [isOpen]);
 
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+
+    const { body, documentElement } = document;
+    const previousBodyOverflow = body.style.overflow;
+    const previousDocumentOverflow = documentElement.style.overflow;
+
+    body.style.overflow = "hidden";
+    documentElement.style.overflow = "hidden";
+
+    return () => {
+      body.style.overflow = previousBodyOverflow;
+      documentElement.style.overflow = previousDocumentOverflow;
+    };
+  }, [isOpen]);
+
   const selectedImage = useMemo(
     () => images.find((image) => image.id === selectedImageId) ?? null,
     [images, selectedImageId],
@@ -164,7 +182,7 @@ export function MealDetailsModal({
                 </button>
               </div>
             </div>
-            <div className="flex-1 overflow-y-auto px-8 pb-12 pt-2 sm:px-10 sm:pb-14 sm:pt-3">
+            <div className="flex-1 overflow-x-hidden overflow-y-auto px-8 pb-12 pt-2 sm:px-10 sm:pb-14 sm:pt-3">
               <div className="space-y-6">
                 <div className="space-y-3">
                 <button
