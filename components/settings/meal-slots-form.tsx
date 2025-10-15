@@ -312,15 +312,33 @@ export function MealSlotsForm({ userId }: MealSlotsFormProps) {
     }
   }, [saveError]);
 
+  const persistSlots = useCallback(
+    async (slots: EditableSlot[]) => {
+      const slotsToPersist: MealSlot[] = slots.map((slot, index) => ({
+        id: slot.id,
+        name: normalizeMealSlotName(slot.name),
+        position: index,
+      }));
+
+      try {
+        await save(slotsToPersist);
+        setSuccessVisible(true);
+      } catch {
+        // Errors are surfaced through saveError state
+      }
+    },
+    [save],
+  );
+
   const handleDragEnd = useCallback(
-    (event: DragEndEvent) => {
+    async (event: DragEndEvent) => {
       const { active, over } = event;
 
       if (!over || active.id === over.id) {
         return;
       }
 
-      let didChange = false;
+      let nextSlots: EditableSlot[] | null = null;
 
       setEditableSlots((previous) => {
         const oldIndex = previous.findIndex((slot) => slot.id === active.id);
@@ -330,11 +348,11 @@ export function MealSlotsForm({ userId }: MealSlotsFormProps) {
           return previous;
         }
 
-        didChange = true;
-        return arrayMove(previous, oldIndex, newIndex);
+        nextSlots = arrayMove(previous, oldIndex, newIndex);
+        return nextSlots;
       });
 
-      if (!didChange) {
+      if (!nextSlots) {
         return;
       }
 
@@ -345,8 +363,14 @@ export function MealSlotsForm({ userId }: MealSlotsFormProps) {
       if (successVisible) {
         setSuccessVisible(false);
       }
+
+      if (hasValidationErrors) {
+        return;
+      }
+
+      await persistSlots(nextSlots);
     },
-    [clearSaveError, saveError, successVisible],
+    [clearSaveError, hasValidationErrors, persistSlots, saveError, successVisible],
   );
 
   const showLoadingState = !hasHydrated && loading;
