@@ -164,7 +164,7 @@ export function AuthScreen() {
   }, [formState, isPasswordLongEnough, isSignUp, isSubmitting]);
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4 py-12">
+    <div className="flex min-h-screen items-center justify-center bg-slate-50 px-8 py-12 sm:px-10">
       <div className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-8 shadow-xl shadow-slate-900/5">
         <div className="mb-8 space-y-2 text-center">
           <span className="inline-flex items-center justify-center rounded-full bg-emerald-100 px-3 py-1 text-xs font-medium uppercase tracking-[0.3em] text-emerald-700">
