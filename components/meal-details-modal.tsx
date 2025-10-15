@@ -153,7 +153,7 @@ export function MealDetailsModal({
     <div className="fixed inset-0 z-50 flex bg-slate-900/70 backdrop-blur-sm transition-opacity">
       <div className="flex h-full w-full items-end justify-center sm:items-stretch sm:justify-end">
         <div
-          className="w-full max-h-[92vh] overflow-hidden rounded-t-[32px] border border-slate-200/80 bg-white shadow-2xl animate-sheet-up sm:h-full sm:max-h-none sm:max-w-[420px] sm:rounded-none sm:border-y-0 sm:border-l sm:shadow-xl sm:animate-drawer-in"
+          className="flex h-[75dvh] w-full max-h-[75dvh] flex-col overflow-hidden rounded-t-[32px] border border-slate-200/80 bg-white shadow-2xl animate-sheet-up sm:h-full sm:max-h-none sm:max-w-[420px] sm:flex-none sm:rounded-none sm:border-y-0 sm:border-l sm:shadow-xl sm:animate-drawer-in"
           role="dialog"
           aria-modal="true"
           aria-labelledby="add-meal-details-title"
@@ -182,7 +182,7 @@ export function MealDetailsModal({
                 </button>
               </div>
             </div>
-            <div className="flex-1 overflow-x-hidden overflow-y-auto px-8 pb-12 pt-2 sm:px-10 sm:pb-14 sm:pt-3">
+            <div className="flex-1 overflow-x-hidden overflow-y-auto overscroll-contain px-8 pb-12 pt-2 sm:px-10 sm:pb-14 sm:pt-3">
               <div className="space-y-6">
                 <div className="space-y-3">
                 <button
