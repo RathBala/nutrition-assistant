@@ -28,8 +28,7 @@ const deriveMealNameFromFile = (fileName: string | null | undefined): string => 
 };
 
 export type MealDetailsSubmitPayload = {
-  file: File;
-  selection: GallerySelection;
+  selection: GallerySelection | null;
   name: string;
   slotId: string;
   slotName: string;
@@ -43,6 +42,7 @@ export type PhotoGalleryModalProps = {
   onSubmit: (payload: MealDetailsSubmitPayload) => void;
   onClose: () => void;
   onBrowseMore: () => void;
+  onRemoveImage: () => void;
   slots: MealSlot[];
   isLoadingSlots: boolean;
 };
@@ -55,6 +55,7 @@ export function PhotoGalleryModal({
   onSubmit,
   onClose,
   onBrowseMore,
+  onRemoveImage,
   slots,
   isLoadingSlots,
 }: PhotoGalleryModalProps) {
@@ -75,12 +76,18 @@ export function PhotoGalleryModal({
 
   useEffect(() => {
     if (!selectedImage) {
-      setMealName("");
       return;
     }
 
     const derived = deriveMealNameFromFile(selectedImage.name);
-    setMealName(derived || selectedImage.name || "");
+
+    setMealName((current) => {
+      if (current.trim().length > 0) {
+        return current;
+      }
+
+      return derived || selectedImage.name || "";
+    });
   }, [selectedImage]);
 
   useEffect(() => {
@@ -93,14 +100,9 @@ export function PhotoGalleryModal({
     }
   }, [selectedSlotId, slots]);
 
-  const hasImages = images.length > 0;
   const hasMultipleImages = images.length > 1;
 
   const handleSubmit = () => {
-    if (!selectedImage) {
-      return;
-    }
-
     const trimmedName = mealName.trim();
 
     if (!trimmedName) {
@@ -114,8 +116,7 @@ export function PhotoGalleryModal({
     }
 
     onSubmit({
-      file: selectedImage.file,
-      selection: selectedImage,
+      selection: selectedImage ?? null,
       name: trimmedName,
       slotId: slot.id,
       slotName: slot.name,
@@ -123,7 +124,7 @@ export function PhotoGalleryModal({
   };
 
   const canSubmit = Boolean(
-    selectedImage && mealName.trim().length > 0 && selectedSlotId && !isLoadingSlots,
+    mealName.trim().length > 0 && selectedSlotId && !isLoadingSlots,
   );
 
   if (!isOpen) {
@@ -163,12 +164,17 @@ export function PhotoGalleryModal({
             </div>
           </div>
           <div className="max-h-[80vh] overflow-y-auto px-4 pb-6 sm:px-6 sm:pb-8">
-            {hasImages ? (
-              <div className="space-y-6">
-                {selectedImage ? (
-                  <div className="space-y-3">
-                    <div className="overflow-hidden rounded-3xl border border-slate-200">
-                      <div className="relative aspect-[4/3] bg-slate-100">
+            <div className="space-y-6">
+              <div className="space-y-3">
+                <button
+                  type="button"
+                  onClick={onBrowseMore}
+                  className="group relative block w-full overflow-hidden rounded-3xl border border-dashed border-slate-200 bg-slate-50 text-left transition focus:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+                  aria-label={selectedImage ? "Change meal photo" : "Add a meal photo"}
+                >
+                  <div className="relative aspect-[4/3] w-full">
+                    {selectedImage ? (
+                      <>
                         <Image
                           src={selectedImage.previewUrl}
                           alt={selectedImage.name}
@@ -177,137 +183,147 @@ export function PhotoGalleryModal({
                           className="object-cover"
                           unoptimized
                         />
-                      </div>
-                      <div className="flex items-center justify-between gap-3 border-t border-slate-200 bg-white/90 px-3 py-2">
-                        <p className="truncate text-xs font-medium text-slate-600">{selectedImage.name}</p>
-                        <button
-                          type="button"
-                          onClick={onBrowseMore}
-                          className="text-xs font-semibold text-brand-dark transition hover:text-brand"
-                        >
-                          Choose another
-                        </button>
-                      </div>
-                    </div>
-                    <div className="space-y-4">
-                      <label className="block space-y-1" htmlFor="meal-name-input">
-                        <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                          Meal name
-                        </span>
-                        <input
-                          id="meal-name-input"
-                          value={mealName}
-                          onChange={(event) => {
-                            setMealName(event.target.value);
-                          }}
-                          placeholder="Add a short description"
-                          className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand"
-                          autoComplete="off"
-                          spellCheck
+                        <span
+                          className="pointer-events-none absolute inset-0 bg-slate-900/0 transition group-hover:bg-slate-900/10"
+                          aria-hidden="true"
                         />
-                      </label>
-                      <div className="space-y-2">
-                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Meal slot</p>
-                        {isLoadingSlots ? (
-                          <div className="flex items-center gap-2 rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-500">
-                            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                            Loading your slots…
-                          </div>
-                        ) : slots.length > 0 ? (
-                          <div className="flex flex-wrap gap-2">
-                            {slots.map((slot) => {
-                              const isSelected = selectedSlotId === slot.id;
-
-                              return (
-                                <button
-                                  key={slot.id}
-                                  type="button"
-                                  onClick={() => setSelectedSlotId(slot.id)}
-                                  className={`rounded-full px-4 py-2 text-sm font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-brand ${
-                                    isSelected
-                                      ? "bg-brand text-white shadow-sm hover:bg-brand-dark"
-                                      : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                                  }`}
-                                  aria-pressed={isSelected}
-                                >
-                                  {slot.name}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        ) : (
-                          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-500">
-                            You don’t have any meal slots yet. Add some in settings to organize your meals.
-                          </div>
-                        )}
+                        <span className="pointer-events-none absolute bottom-3 left-3 rounded-full bg-white/90 px-3 py-1 text-xs font-semibold text-slate-900 shadow-sm">
+                          Tap to change photo
+                        </span>
+                      </>
+                    ) : (
+                      <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
+                        <span className="flex h-11 w-11 items-center justify-center rounded-full bg-white text-slate-400 shadow-sm">
+                          <Images className="h-5 w-5" aria-hidden="true" />
+                        </span>
+                        <div className="space-y-1">
+                          <p className="text-sm font-semibold text-slate-900">Add a meal photo</p>
+                          <p className="text-xs text-slate-500">Tap to upload (optional)</p>
+                        </div>
                       </div>
+                    )}
+                  </div>
+                </button>
+
+                {selectedImage ? (
+                  <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white/90 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
+                    <p className="truncate text-xs font-medium text-slate-600">{selectedImage.name}</p>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={onBrowseMore}
+                        className="text-xs font-semibold text-brand-dark transition hover:text-brand"
+                      >
+                        Change
+                      </button>
+                      <span className="h-3 w-px bg-slate-200" aria-hidden="true" />
+                      <button
+                        type="button"
+                        onClick={onRemoveImage}
+                        className="text-xs font-semibold text-slate-500 transition hover:text-slate-700"
+                      >
+                        Remove
+                      </button>
                     </div>
                   </div>
-                ) : null}
+                ) : (
+                  <p className="text-center text-xs text-slate-500">Meal photos are optional. Tap above to add one.</p>
+                )}
+              </div>
 
-                {hasMultipleImages ? (
-                  <div className="space-y-3">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                      Or pick a different photo
-                    </p>
-                    <div className="grid grid-cols-4 gap-2 sm:grid-cols-5">
-                      {images.map((image) => {
-                        const isSelected = selectedImageId === image.id;
+              <div className="space-y-4">
+                <label className="block space-y-1" htmlFor="meal-name-input">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Meal name</span>
+                  <input
+                    id="meal-name-input"
+                    value={mealName}
+                    onChange={(event) => {
+                      setMealName(event.target.value);
+                    }}
+                    placeholder="Add a short description"
+                    className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand"
+                    autoComplete="off"
+                    spellCheck
+                  />
+                </label>
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Meal slot</p>
+                  {isLoadingSlots ? (
+                    <div className="flex items-center gap-2 rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-500">
+                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                      Loading your slots…
+                    </div>
+                  ) : slots.length > 0 ? (
+                    <div className="flex flex-wrap gap-2">
+                      {slots.map((slot) => {
+                        const isSelected = selectedSlotId === slot.id;
 
                         return (
                           <button
-                            key={image.id}
+                            key={slot.id}
                             type="button"
-                            onClick={() => onSelectImage(image.id)}
-                            className={`relative h-20 overflow-hidden rounded-2xl border-2 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-brand ${
-                              isSelected ? "border-brand" : "border-transparent hover:border-slate-200"
+                            onClick={() => setSelectedSlotId(slot.id)}
+                            className={`rounded-full px-4 py-2 text-sm font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-brand ${
+                              isSelected
+                                ? "bg-brand text-white shadow-sm hover:bg-brand-dark"
+                                : "bg-slate-100 text-slate-600 hover:bg-slate-200"
                             }`}
                             aria-pressed={isSelected}
                           >
-                            <Image
-                              src={image.previewUrl}
-                              alt={image.name}
-                              fill
-                              sizes="(max-width: 640px) 25vw, 80px"
-                              className="object-cover"
-                              unoptimized
-                            />
-                            <span className="absolute inset-x-0 bottom-0 bg-slate-900/60 px-1.5 py-1 text-[10px] font-medium text-white line-clamp-2">
-                              {image.name}
-                            </span>
-                            {isSelected && (
-                              <>
-                                <span className="absolute inset-0 bg-slate-900/10" aria-hidden="true" />
-                                <CheckCircle2 className="absolute right-1.5 top-1.5 h-4 w-4 text-white drop-shadow" aria-hidden="true" />
-                              </>
-                            )}
+                            {slot.name}
                           </button>
                         );
                       })}
                     </div>
+                  ) : (
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-500">
+                      You don’t have any meal slots yet. Add some in settings to organize your meals.
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {hasMultipleImages ? (
+                <div className="space-y-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Or pick a different photo</p>
+                  <div className="grid grid-cols-4 gap-2 sm:grid-cols-5">
+                    {images.map((image) => {
+                      const isSelected = selectedImageId === image.id;
+
+                      return (
+                        <button
+                          key={image.id}
+                          type="button"
+                          onClick={() => onSelectImage(image.id)}
+                          className={`relative h-20 overflow-hidden rounded-2xl border-2 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-brand ${
+                            isSelected ? "border-brand" : "border-transparent hover:border-slate-200"
+                          }`}
+                          aria-pressed={isSelected}
+                        >
+                          <Image
+                            src={image.previewUrl}
+                            alt={image.name}
+                            fill
+                            sizes="(max-width: 640px) 25vw, 80px"
+                            className="object-cover"
+                            unoptimized
+                          />
+                          <span className="absolute inset-x-0 bottom-0 bg-slate-900/60 px-1.5 py-1 text-[10px] font-medium text-white line-clamp-2">
+                            {image.name}
+                          </span>
+                          {isSelected && (
+                            <>
+                              <span className="absolute inset-0 bg-slate-900/10" aria-hidden="true" />
+                              <CheckCircle2 className="absolute right-1.5 top-1.5 h-4 w-4 text-white drop-shadow" aria-hidden="true" />
+                            </>
+                          )}
+                        </button>
+                      );
+                    })}
                   </div>
-                ) : null}
-              </div>
-            ) : (
-              <div className="flex flex-col items-center justify-center gap-4 rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 px-6 py-12 text-center">
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-slate-400 shadow-sm">
-                  <Images className="h-5 w-5" aria-hidden="true" />
                 </div>
-                <div className="space-y-1">
-                  <p className="text-sm font-semibold text-slate-900">No photos yet</p>
-                  <p className="text-sm text-slate-500">
-                    Choose images from your camera roll or upload new ones to get started.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={onBrowseMore}
-                  className="inline-flex items-center justify-center rounded-full bg-brand px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-dark focus:outline-none focus-visible:ring-2 focus-visible:ring-brand"
-                >
-                  Browse photos
-                </button>
-              </div>
-            )}
+              ) : null}
+            </div>
           </div>
         </div>
       </div>

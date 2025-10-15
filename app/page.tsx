@@ -122,7 +122,7 @@ type PendingMealDetails = {
   name: string;
   slotId: string;
   slotName: string;
-  sourceFileName: string;
+  sourceFileName: string | null;
 };
 
 export default function Home() {
@@ -287,35 +287,58 @@ function Dashboard({
     cameraInputRef.current?.click();
   }, []);
 
-  const handleOpenGallery = useCallback(() => {
-    clearPendingMealState();
-    setSelectedImageId(null);
-    setUploadError(null);
-    setShowSuccess(false);
-    setUploadProgress(null);
-    openFilePicker();
-  }, [clearPendingMealState, openFilePicker]);
+  const beginMealDetails = useCallback(
+    (options?: { openPicker?: "file" | "camera" }) => {
+      if (uploadTaskRef.current) {
+        uploadTaskRef.current.cancel();
+        uploadTaskRef.current = null;
+      }
+
+      clearPendingMealState();
+      setGallerySelections((previous) => {
+        revokePreviews(previous);
+        return [];
+      });
+      setSelectedImageId(null);
+      setUploadError(null);
+      setMealSaveError(null);
+      setFeedbackErrorTitle(null);
+      setUploadProgress(null);
+      setIsUploading(false);
+      setShowSuccess(false);
+      setIsGalleryOpen(true);
+
+      if (options?.openPicker === "file") {
+        openFilePicker();
+      } else if (options?.openPicker === "camera") {
+        openCameraPicker();
+      }
+    },
+    [
+      clearPendingMealState,
+      openCameraPicker,
+      openFilePicker,
+      revokePreviews,
+    ],
+  );
+
+  const handleOpenMealDetails = useCallback(() => {
+    beginMealDetails();
+  }, [beginMealDetails]);
+
+  const handleUploadFromGallery = useCallback(() => {
+    beginMealDetails({ openPicker: "file" });
+  }, [beginMealDetails]);
 
   const handleCaptureMeal = useCallback(() => {
-    clearPendingMealState();
-    setSelectedImageId(null);
-    setUploadError(null);
-    setShowSuccess(false);
-    setUploadProgress(null);
-    openCameraPicker();
-  }, [clearPendingMealState, openCameraPicker]);
+    beginMealDetails({ openPicker: "camera" });
+  }, [beginMealDetails]);
 
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
 
     if (!files || files.length === 0) {
       event.target.value = "";
-
-      if (gallerySelections.length === 0) {
-        setSelectedImageId(null);
-        setIsGalleryOpen(false);
-      }
-
       return;
     }
 
@@ -361,9 +384,36 @@ function Dashboard({
     setSelectedImageId(imageId);
   };
 
+  const handleRemoveSelectedImage = useCallback(() => {
+    pendingSelectionRef.current = null;
+    setGallerySelections((previous) => {
+      if (!selectedImageId) {
+        revokePreviews(previous);
+        setSelectedImageId(null);
+        return [];
+      }
+
+      const removedItems = previous.filter((item) => item.id === selectedImageId);
+      const remaining = previous.filter((item) => item.id !== selectedImageId);
+
+      revokePreviews(removedItems);
+
+      if (remaining.length === 0) {
+        setSelectedImageId(null);
+      } else if (!remaining.some((item) => item.id === selectedImageId)) {
+        setSelectedImageId(remaining[0].id);
+      }
+
+      return remaining;
+    });
+    setUploadError(null);
+    setMealSaveError(null);
+    setFeedbackErrorTitle(null);
+  }, [revokePreviews, selectedImageId]);
+
   const attemptSaveMeal = useCallback(
     async (
-      uploadResult: MealImageUploadResult,
+      uploadResult: MealImageUploadResult | null,
       overrideDetails?: PendingMealDetails | null,
     ) => {
       const details = overrideDetails ?? pendingMealDetails;
@@ -381,8 +431,8 @@ function Dashboard({
         const savedDocRef = await logMealEntry(user.uid, {
           name: details.name,
           slot: { id: details.slotId, name: details.slotName },
-          image: uploadResult,
-          sourceFileName: details.sourceFileName,
+          image: uploadResult ?? null,
+          sourceFileName: details.sourceFileName ?? null,
         });
 
         if (!isMountedRef.current) {
@@ -390,7 +440,7 @@ function Dashboard({
         }
 
         clearPendingMealState();
-        setLastUploadResult(uploadResult);
+        setLastUploadResult(uploadResult ?? null);
         setShowSuccess(true);
         console.info("Meal entry saved", savedDocRef.id);
       } catch (error) {
@@ -488,26 +538,50 @@ function Dashboard({
         name,
         slotId,
         slotName,
-        sourceFileName: selection.name,
+        sourceFileName: selection?.name ?? null,
       };
 
+      setPendingMealDetails(details);
+
+      if (selection) {
+        setSelectedImageId(null);
+        setGallerySelections((previous) => {
+          revokePreviews(previous.filter((item) => item.id !== selection.id));
+          return [];
+        });
+
+        startUploadForSelection(selection, details);
+        return;
+      }
+
+      setIsGalleryOpen(false);
+      setShowSuccess(false);
+      setUploadError(null);
+      setFeedbackErrorTitle(null);
+      setUploadProgress(null);
       setSelectedImageId(null);
       setGallerySelections((previous) => {
-        revokePreviews(previous.filter((item) => item.id !== selection.id));
+        revokePreviews(previous);
         return [];
       });
-
-      startUploadForSelection(selection, details);
+      pendingSelectionRef.current = null;
+      setPendingUploadResult(null);
+      setLastUploadResult(null);
+      attemptSaveMeal(null, details);
     },
-    [revokePreviews, startUploadForSelection],
+    [
+      attemptSaveMeal,
+      revokePreviews,
+      startUploadForSelection,
+    ],
   );
 
   const handleRetryFlow = useCallback(() => {
-    if (mealSaveError && pendingUploadResult && pendingMealDetails) {
+    if (mealSaveError && pendingMealDetails) {
       setMealSaveError(null);
       setUploadError(null);
       setFeedbackErrorTitle(null);
-      attemptSaveMeal(pendingUploadResult, pendingMealDetails);
+      attemptSaveMeal(pendingUploadResult ?? null, pendingMealDetails);
       return;
     }
 
@@ -531,14 +605,12 @@ function Dashboard({
       return;
     }
 
-    clearPendingMealState();
-    openFilePicker();
+    beginMealDetails({ openPicker: "file" });
   }, [
     attemptSaveMeal,
-    clearPendingMealState,
+    beginMealDetails,
     gallerySelections,
     mealSaveError,
-    openFilePicker,
     pendingMealDetails,
     pendingUploadResult,
     startUploadForSelection,
@@ -589,10 +661,10 @@ function Dashboard({
         eyebrow="Nutrition Assistant"
         title="Your meals for Tuesday, June 4"
         description="Upload photos of what you eat and get instant calorie estimates, macro breakdowns, and gentle coaching from your AI companion."
-        onLogMeal={handleOpenGallery}
+        onLogMeal={handleOpenMealDetails}
       />
 
-      <QuickAdd onCapture={handleCaptureMeal} onUpload={handleOpenGallery} />
+      <QuickAdd onCapture={handleCaptureMeal} onUpload={handleUploadFromGallery} />
       <MacroSummary macros={todayMacros} goal={macroGoals} />
 
       <section className="grid gap-6 lg:grid-cols-[1fr_minmax(260px,320px)]">
@@ -632,6 +704,7 @@ function Dashboard({
         onSubmit={handleSubmitMealFromModal}
         onClose={handleCloseGallery}
         onBrowseMore={openFilePicker}
+        onRemoveImage={handleRemoveSelectedImage}
         slots={mealSlots}
         isLoadingSlots={mealSlotsLoading}
       />
