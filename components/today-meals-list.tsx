@@ -42,6 +42,7 @@ export type TodayMealEntry = {
   kind: "draft" | "log";
   status: MealDraftStatus | "logged";
   name: string;
+  slotId: string | null;
   slotName: string;
   loggedAt: Date | null;
   imageUrl: string | null;
@@ -548,4 +549,3 @@ export const TodayMealsList = ({
     </div>
   );
 };
-
