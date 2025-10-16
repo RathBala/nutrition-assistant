@@ -45,6 +45,7 @@ export type MealDetailsModalProps = {
   onRemoveImage: () => void;
   slots: MealSlot[];
   isLoadingSlots: boolean;
+  defaultSlotId?: string | null;
 };
 
 export function MealDetailsModal({
@@ -58,6 +59,7 @@ export function MealDetailsModal({
   onRemoveImage,
   slots,
   isLoadingSlots,
+  defaultSlotId,
 }: MealDetailsModalProps) {
   const [mealName, setMealName] = useState("");
   const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
@@ -109,14 +111,20 @@ export function MealDetailsModal({
   }, [selectedImage]);
 
   useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+
     if (selectedSlotId) {
       return;
     }
 
-    if (slots.length > 0) {
-      setSelectedSlotId(slots[0].id);
+    const fallbackSlotId = defaultSlotId ?? slots[0]?.id ?? null;
+
+    if (fallbackSlotId) {
+      setSelectedSlotId(fallbackSlotId);
     }
-  }, [selectedSlotId, slots]);
+  }, [defaultSlotId, isOpen, selectedSlotId, slots]);
 
   const hasMultipleImages = images.length > 1;
 

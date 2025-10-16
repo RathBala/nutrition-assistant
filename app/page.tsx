@@ -158,6 +158,27 @@ function Dashboard({
     });
   }, [mealSlots, todayMeals]);
 
+  const defaultMealSlotId = useMemo(() => {
+    if (mealSlots.length === 0) {
+      return null;
+    }
+
+    const orderedSlots = [...mealSlots].sort((a, b) => a.position - b.position);
+    const loggedSlotIds = new Set(
+      todayMeals
+        .map((meal) => meal.slotId)
+        .filter((slotId): slotId is string => typeof slotId === "string" && slotId.length > 0),
+    );
+
+    const firstAvailable = orderedSlots.find((slot) => !loggedSlotIds.has(slot.id));
+
+    if (firstAvailable) {
+      return firstAvailable.id;
+    }
+
+    return orderedSlots[0]?.id ?? null;
+  }, [mealSlots, todayMeals]);
+
   const clearPendingMealState = useCallback(() => {
     setIsSavingMeal(false);
     setMealSaveError(null);
@@ -656,6 +677,7 @@ function Dashboard({
         onRemoveImage={handleRemoveSelectedImage}
         slots={mealSlots}
         isLoadingSlots={mealSlotsLoading}
+        defaultSlotId={defaultMealSlotId}
       />
       <LogMealFab onClick={handleOpenMealDetails} />
     </AppShell>
