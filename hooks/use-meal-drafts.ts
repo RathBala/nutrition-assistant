@@ -147,12 +147,14 @@ export const useMealDrafts = (userId: string | null | undefined): UseMealDraftsR
 
   useEffect(() => {
     if (!userId) {
+      console.log("[useMealDrafts] No userId provided; clearing drafts");
       setDrafts([]);
       setLoading(false);
       setError(null);
       return undefined;
     }
 
+    console.log("[useMealDrafts] Subscribing to meal drafts", { userId });
     setLoading(true);
     setError(null);
 
@@ -163,6 +165,12 @@ export const useMealDrafts = (userId: string | null | undefined): UseMealDraftsR
       draftsQuery,
       (snapshot) => {
         const nextDrafts = snapshot.docs.map((doc) => mapDraftDocument(doc.id, doc.data()));
+        console.log("[useMealDrafts] Snapshot received", {
+          userId,
+          count: nextDrafts.length,
+          ids: nextDrafts.map((draft) => draft.id),
+          statuses: nextDrafts.map((draft) => draft.status),
+        });
         setDrafts(nextDrafts);
         setLoading(false);
         setError(null);
@@ -186,4 +194,3 @@ export const useMealDrafts = (userId: string | null | undefined): UseMealDraftsR
 
   return { drafts, loading, error, refresh };
 };
-

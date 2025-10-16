@@ -55,12 +55,14 @@ export const useTodayMealLogs = (userId: string | null | undefined): UseTodayMea
 
   useEffect(() => {
     if (!userId) {
+      console.log("[useTodayMealLogs] No userId provided; clearing meals");
       setMeals([]);
       setLoading(false);
       setError(null);
       return undefined;
     }
 
+    console.log("[useTodayMealLogs] Subscribing to today meal logs", { userId });
     setLoading(true);
     setError(null);
 
@@ -98,6 +100,13 @@ export const useTodayMealLogs = (userId: string | null | undefined): UseTodayMea
             isEstimated: Boolean(data.isEstimated),
             sourceDraftId: data.sourceDraftId ?? null,
           };
+        });
+
+        console.log("[useTodayMealLogs] Snapshot received", {
+          userId,
+          count: nextMeals.length,
+          ids: nextMeals.map((meal) => meal.id),
+          slotIds: nextMeals.map((meal) => meal.slotId),
         });
 
         setMeals(nextMeals);

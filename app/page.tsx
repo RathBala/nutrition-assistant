@@ -186,7 +186,16 @@ function Dashboard({
       autoPromoteAt: null,
     }));
 
-    return [...draftEntries, ...logEntries].sort((a, b) => {
+    const combined = [...draftEntries, ...logEntries];
+
+    console.log("[Dashboard] Recomputed todayMeals", {
+      draftCount: draftEntries.length,
+      logCount: logEntries.length,
+      combinedCount: combined.length,
+      statuses: combined.map((meal) => ({ id: meal.id, kind: meal.kind, status: meal.status })),
+    });
+
+    return combined.sort((a, b) => {
       const timeA = a.loggedAt ? a.loggedAt.getTime() : 0;
       const timeB = b.loggedAt ? b.loggedAt.getTime() : 0;
 

@@ -28,29 +28,77 @@ const buildErrorPayload = (code: string, message: string) => ({
 export const mealDraftsOnCreate = functions.firestore
   .document("users/{uid}/mealDrafts/{draftId}")
   .onCreate(async (snapshot, context) => {
+    functions.logger.info("Meal draft created; evaluating trigger", {
+      uid: context.params.uid,
+      draftId: context.params.draftId,
+      initialStatus: snapshot.get("status") ?? "pending",
+    });
+
     const data = snapshot.data() as MealDraftDoc;
     const status = (data.status ?? "pending") as MealDraftStatus;
 
     if (status !== "pending") {
+      functions.logger.info("Skipping meal draft processing; status is not pending", {
+        uid: context.params.uid,
+        draftId: context.params.draftId,
+        status,
+      });
       return;
     }
 
-    await snapshot.ref.update({
-      status: "processing",
-      analysisStartedAt: fieldValue.serverTimestamp(),
-      updatedAt: fieldValue.serverTimestamp(),
+    functions.logger.info("Marking meal draft as processing", {
+      uid: context.params.uid,
+      draftId: context.params.draftId,
     });
+
+    await snapshot.ref
+      .update({
+        status: "processing",
+        analysisStartedAt: fieldValue.serverTimestamp(),
+        updatedAt: fieldValue.serverTimestamp(),
+      })
+      .then(() => {
+        functions.logger.info("Meal draft status updated to processing", {
+          uid: context.params.uid,
+          draftId: context.params.draftId,
+        });
+      });
 
     try {
       const storagePath = data.image?.storagePath;
 
       if (!storagePath) {
+        functions.logger.error("Meal draft missing storage path; aborting analysis", {
+          uid: context.params.uid,
+          draftId: context.params.draftId,
+        });
         throw new Error("missing-image");
       }
 
+      functions.logger.info("Downloading meal draft image for analysis", {
+        uid: context.params.uid,
+        draftId: context.params.draftId,
+        storagePath,
+      });
+
       const bucket = admin.storage().bucket();
       const [buffer] = await bucket.file(storagePath).download();
+      functions.logger.info("Image download complete; running stub analysis", {
+        uid: context.params.uid,
+        draftId: context.params.draftId,
+        bufferSize: buffer.length,
+      });
+
       const analysis = await runStubMealAnalysis(buffer);
+
+      functions.logger.info("Meal analysis complete; updating draft", {
+        uid: context.params.uid,
+        draftId: context.params.draftId,
+        analysisSummary: {
+          calories: analysis.calories,
+          items: analysis.items.length,
+        },
+      });
 
       await snapshot.ref.update({
         status: "draft",
@@ -70,6 +118,7 @@ export const mealDraftsOnCreate = functions.firestore
       functions.logger.error("Meal draft analysis failed", error, {
         uid: context.params.uid,
         draftId: context.params.draftId,
+        status,
       });
 
       await snapshot.ref.update({
@@ -81,4 +130,3 @@ export const mealDraftsOnCreate = functions.firestore
       });
     }
   });
-
