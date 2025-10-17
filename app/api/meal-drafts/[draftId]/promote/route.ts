@@ -85,9 +85,23 @@ export const POST = async (
     return NextResponse.json({ error: "Missing draft id" }, { status: 400 });
   }
 
-  const firestore = getFirebaseAdminFirestore();
+  let firestore: ReturnType<typeof getFirebaseAdminFirestore>;
+
+  try {
+    firestore = getFirebaseAdminFirestore();
+  } catch (error) {
+    console.error("Failed to initialize Firebase Admin Firestore", error);
+    return NextResponse.json({ error: "Server configuration error" }, { status: 500 });
+  }
+
   const draftRef = firestore.doc(`users/${decodedToken.uid}/mealDrafts/${draftId}`);
   const logsCollection = firestore.collection(`users/${decodedToken.uid}/mealLogs`);
+
+  console.info("[PromoteMealDraft] Starting transaction", {
+    uid: decodedToken.uid,
+    draftId,
+    isEstimated: payload.isEstimated,
+  });
 
   try {
     const result = await firestore.runTransaction(async (transaction) => {
@@ -127,19 +141,31 @@ export const POST = async (
       return { logId: logRef.id };
     });
 
+    console.info("[PromoteMealDraft] Draft promoted", {
+      uid: decodedToken.uid,
+      draftId,
+      logId: result.logId,
+    });
+
     return NextResponse.json({ ok: true, logId: result.logId });
   } catch (error) {
     if (error instanceof Error) {
       if (error.message === "draft-not-found") {
+        console.warn("[PromoteMealDraft] Draft not found", { uid: decodedToken.uid, draftId });
         return NextResponse.json({ error: "Draft not found" }, { status: 404 });
       }
 
       if (error.message === "draft-not-ready") {
+        console.warn("[PromoteMealDraft] Draft not ready", {
+          uid: decodedToken.uid,
+          draftId,
+          reason: error.message,
+        });
         return NextResponse.json({ error: "Draft is not ready for promotion" }, { status: 400 });
       }
     }
 
-    console.error("Failed to promote meal draft", error);
+    console.error("Failed to promote meal draft", error, { uid: decodedToken.uid, draftId });
     return NextResponse.json({ error: "Failed to promote meal draft" }, { status: 500 });
   }
 };
