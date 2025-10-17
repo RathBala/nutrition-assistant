@@ -12,6 +12,7 @@ import {
 
 import { getFirebaseFirestore } from "@/lib/firebase/firestore";
 import { getMealLogsCollection } from "@/lib/firestore/meal-logs";
+import type { MealDraftAnalysis } from "@/lib/firestore/meal-drafts";
 
 const LOAD_ERROR_MESSAGE = "We couldn’t load today’s meals. Please try again.";
 
@@ -23,6 +24,9 @@ type TodayMealLog = {
   loggedAt: Date | null;
   imageUrl: string | null;
   sourceFileName: string | null;
+  analysis: MealDraftAnalysis | null;
+  isEstimated: boolean;
+  sourceDraftId: string | null;
 };
 
 type UseTodayMealLogsResult = {
@@ -51,12 +55,14 @@ export const useTodayMealLogs = (userId: string | null | undefined): UseTodayMea
 
   useEffect(() => {
     if (!userId) {
+      console.log("[useTodayMealLogs] No userId provided; clearing meals");
       setMeals([]);
       setLoading(false);
       setError(null);
       return undefined;
     }
 
+    console.log("[useTodayMealLogs] Subscribing to today meal logs", { userId });
     setLoading(true);
     setError(null);
 
@@ -90,7 +96,17 @@ export const useTodayMealLogs = (userId: string | null | undefined): UseTodayMea
             loggedAt: createdAt,
             imageUrl,
             sourceFileName: data.sourceFileName ?? null,
+            analysis: (data.analysis as MealDraftAnalysis | null | undefined) ?? null,
+            isEstimated: Boolean(data.isEstimated),
+            sourceDraftId: data.sourceDraftId ?? null,
           };
+        });
+
+        console.log("[useTodayMealLogs] Snapshot received", {
+          userId,
+          count: nextMeals.length,
+          ids: nextMeals.map((meal) => meal.id),
+          slotIds: nextMeals.map((meal) => meal.slotId),
         });
 
         setMeals(nextMeals);
