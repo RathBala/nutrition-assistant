@@ -311,7 +311,6 @@ const ReadyDraftCard = ({ meal, onPromoteDraft }: DraftCardProps) => {
       } catch (error) {
         console.error("Auto-promotion failed", error);
         setPromoteError("We couldn’t auto-save this meal. Please review it manually.");
-        setAutoPromoteTriggered(false);
       }
     }, delay);
 

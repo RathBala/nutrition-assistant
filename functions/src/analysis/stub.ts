@@ -63,10 +63,40 @@ const pickResponse = (buffer: Buffer): StubMealAnalysis => {
   return SAMPLE_RESPONSES[index];
 };
 
-export const runStubMealAnalysis = async (imageBuffer: Buffer): Promise<StubMealAnalysis> => {
+type StubMealAnalysisInput = {
+  imageBuffer?: Buffer | null;
+  mealName?: string | null;
+};
+
+const computeSeed = ({ imageBuffer, mealName }: StubMealAnalysisInput): number => {
+  if (imageBuffer && imageBuffer.length > 0) {
+    return imageBuffer[0];
+  }
+
+  const normalizedName = mealName?.trim().toLowerCase();
+
+  if (normalizedName && normalizedName.length > 0) {
+    let hash = 0;
+
+    for (let index = 0; index < normalizedName.length; index += 1) {
+      hash = (hash + normalizedName.charCodeAt(index)) % 256;
+    }
+
+    return hash;
+  }
+
+  return 0;
+};
+
+export const runStubMealAnalysis = async (
+  input: StubMealAnalysisInput,
+): Promise<StubMealAnalysis> => {
   // Simulate latency for the MVP so the client can show the pending state.
   await new Promise((resolve) => setTimeout(resolve, 1500));
 
-  return pickResponse(imageBuffer);
+  const seed = computeSeed(input);
+  const buffer = input.imageBuffer ?? Buffer.from([seed]);
+
+  return pickResponse(buffer);
 };
 

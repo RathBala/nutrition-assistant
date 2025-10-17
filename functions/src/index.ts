@@ -10,6 +10,7 @@ type MealDraftDoc = {
     downloadURL?: string;
   } | null;
   autoPromoteDelayMinutes?: number;
+  name?: string | null;
 };
 
 type MealDraftStatus = "pending" | "processing" | "draft" | "error";
@@ -66,30 +67,44 @@ export const mealDraftsOnCreate = functions.firestore
 
     try {
       const storagePath = data.image?.storagePath;
+      const mealName = typeof data.name === "string" ? data.name.trim() : "";
 
-      if (!storagePath) {
-        functions.logger.error("Meal draft missing storage path; aborting analysis", {
+      let imageBuffer: Buffer | null = null;
+
+      if (storagePath) {
+        functions.logger.info("Downloading meal draft image for analysis", {
+          uid: context.params.uid,
+          draftId: context.params.draftId,
+          storagePath,
+        });
+
+        const bucket = admin.storage().bucket();
+        const [buffer] = await bucket.file(storagePath).download();
+        imageBuffer = buffer;
+
+        functions.logger.info("Image download complete; running stub analysis", {
+          uid: context.params.uid,
+          draftId: context.params.draftId,
+          bufferSize: buffer.length,
+        });
+      } else if (mealName) {
+        functions.logger.info("No meal image provided; using name for stub analysis", {
+          uid: context.params.uid,
+          draftId: context.params.draftId,
+          mealName,
+        });
+      } else {
+        functions.logger.error("Meal draft missing both image and name; aborting analysis", {
           uid: context.params.uid,
           draftId: context.params.draftId,
         });
-        throw new Error("missing-image");
+        throw new Error("missing-input");
       }
 
-      functions.logger.info("Downloading meal draft image for analysis", {
-        uid: context.params.uid,
-        draftId: context.params.draftId,
-        storagePath,
+      const analysis = await runStubMealAnalysis({
+        imageBuffer,
+        mealName,
       });
-
-      const bucket = admin.storage().bucket();
-      const [buffer] = await bucket.file(storagePath).download();
-      functions.logger.info("Image download complete; running stub analysis", {
-        uid: context.params.uid,
-        draftId: context.params.draftId,
-        bufferSize: buffer.length,
-      });
-
-      const analysis = await runStubMealAnalysis(buffer);
 
       functions.logger.info("Meal analysis complete; updating draft", {
         uid: context.params.uid,
@@ -113,6 +128,11 @@ export const mealDraftsOnCreate = functions.firestore
       if (error instanceof Error && error.message === "missing-image") {
         code = "missing_image";
         message = "Meal draft is missing an image path.";
+      }
+
+      if (error instanceof Error && error.message === "missing-input") {
+        code = "missing_input";
+        message = "Meal draft is missing details for analysis.";
       }
 
       functions.logger.error("Meal draft analysis failed", error, {
