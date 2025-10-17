@@ -1,11 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import {
   AlertCircle,
   CheckCircle2,
-  Clock,
   ImageIcon,
   Loader2,
   RefreshCw,
@@ -67,48 +66,6 @@ type DraftCardProps = {
   meal: TodayMealEntry;
   onPromoteDraft?: (draftId: string, options: { isEstimated: boolean }) => Promise<void>;
   onRetryDraftAnalysis?: (draftId: string) => Promise<void>;
-};
-
-const DraftCountdown = ({ target }: { target: Date | null }) => {
-  const [remaining, setRemaining] = useState<number | null>(() => {
-    if (!target) {
-      return null;
-    }
-
-    return Math.max(0, target.getTime() - Date.now());
-  });
-
-  useEffect(() => {
-    if (!target) {
-      setRemaining(null);
-      return undefined;
-    }
-
-    const interval = window.setInterval(() => {
-      setRemaining(Math.max(0, target.getTime() - Date.now()));
-    }, 1000);
-
-    return () => {
-      window.clearInterval(interval);
-    };
-  }, [target]);
-
-  if (!target || remaining === null) {
-    return null;
-  }
-
-  const totalSeconds = Math.ceil(remaining / 1000);
-  const minutes = Math.floor(totalSeconds / 60)
-    .toString()
-    .padStart(2, "0");
-  const seconds = (totalSeconds % 60).toString().padStart(2, "0");
-
-  return (
-    <div className="flex items-center gap-1 text-xs font-semibold text-slate-500">
-      <Clock className="h-3.5 w-3.5" aria-hidden />
-      Auto-saving in {minutes}:{seconds}
-    </div>
-  );
 };
 
 const DraftAnalysisSummary = ({ analysis }: { analysis: MealDraftAnalysis | null }) => {
@@ -289,37 +246,9 @@ const ErrorDraftCard = ({ meal, onRetryDraftAnalysis }: DraftCardProps) => {
 const ReadyDraftCard = ({ meal, onPromoteDraft }: DraftCardProps) => {
   const [promoting, setPromoting] = useState(false);
   const [promoteError, setPromoteError] = useState<string | null>(null);
-  const [autoPromoteTriggered, setAutoPromoteTriggered] = useState(false);
+  const hasAttemptedAutoSave = useRef(false);
 
-  useEffect(() => {
-    if (!meal.draftId || !onPromoteDraft || autoPromoteTriggered) {
-      return undefined;
-    }
-
-    if (!meal.autoPromoteAt) {
-      return undefined;
-    }
-
-    const now = Date.now();
-    const target = meal.autoPromoteAt.getTime();
-    const delay = Math.max(0, target - now);
-
-    const timeout = window.setTimeout(async () => {
-      setAutoPromoteTriggered(true);
-      try {
-        await onPromoteDraft(meal.draftId!, { isEstimated: true });
-      } catch (error) {
-        console.error("Auto-promotion failed", error);
-        setPromoteError("We couldn’t auto-save this meal. Please review it manually.");
-      }
-    }, delay);
-
-    return () => {
-      window.clearTimeout(timeout);
-    };
-  }, [autoPromoteTriggered, meal, onPromoteDraft]);
-
-  const handlePromote = async () => {
+  const promoteDraft = useCallback(async () => {
     if (!meal.draftId || !onPromoteDraft) {
       return;
     }
@@ -328,13 +257,26 @@ const ReadyDraftCard = ({ meal, onPromoteDraft }: DraftCardProps) => {
     setPromoteError(null);
 
     try {
-      await onPromoteDraft(meal.draftId, { isEstimated: false });
+      await onPromoteDraft(meal.draftId, { isEstimated: true });
     } catch (error) {
-      console.error("Failed to promote meal draft", error);
-      setPromoteError("We couldn’t save this meal yet. Please try again.");
+      console.error("Failed to save meal draft", error);
+      setPromoteError("We couldn’t save this meal automatically. Please try again.");
     } finally {
       setPromoting(false);
     }
+  }, [meal.draftId, onPromoteDraft]);
+
+  useEffect(() => {
+    if (hasAttemptedAutoSave.current || !meal.draftId || !onPromoteDraft) {
+      return;
+    }
+
+    hasAttemptedAutoSave.current = true;
+    void promoteDraft();
+  }, [meal.draftId, onPromoteDraft, promoteDraft]);
+
+  const handleRetry = async () => {
+    await promoteDraft();
   };
 
   return (
@@ -370,21 +312,27 @@ const ReadyDraftCard = ({ meal, onPromoteDraft }: DraftCardProps) => {
         </header>
         <DraftAnalysisSummary analysis={meal.analysis} />
         <div className="flex flex-wrap items-center gap-3">
-          <button
-            type="button"
-            onClick={handlePromote}
-            disabled={promoting || !onPromoteDraft}
-            className="inline-flex items-center gap-2 rounded-full bg-brand-dark px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {promoting ? "Saving…" : "Save now"}
-          </button>
-          <p className="text-xs text-slate-500">
-            Tweaking portions will come later — you can edit in the log after saving.
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <DraftCountdown target={meal.autoPromoteAt} />
-          {promoteError ? <p className="text-xs text-red-600">{promoteError}</p> : null}
+          {promoting ? (
+            <span className="inline-flex items-center gap-2 text-sm font-semibold text-brand">
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+              Saving automatically…
+            </span>
+          ) : promoteError ? (
+            <>
+              <p className="text-xs text-red-600">{promoteError}</p>
+              <button
+                type="button"
+                onClick={handleRetry}
+                className="inline-flex items-center gap-2 rounded-full border border-red-200 bg-white px-4 py-2 text-xs font-semibold text-red-700 transition hover:bg-red-50"
+              >
+                Try again
+              </button>
+            </>
+          ) : (
+            <p className="text-xs text-slate-500">
+              Tweaking portions will come later — you can edit in the log after saving.
+            </p>
+          )}
         </div>
       </div>
     </article>
