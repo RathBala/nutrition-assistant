@@ -246,36 +246,71 @@ const ErrorDraftCard = ({ meal, onRetryDraftAnalysis }: DraftCardProps) => {
 const ReadyDraftCard = ({ meal, onPromoteDraft }: DraftCardProps) => {
   const [promoting, setPromoting] = useState(false);
   const [promoteError, setPromoteError] = useState<string | null>(null);
+  const [canRetryManually, setCanRetryManually] = useState(false);
   const hasAttemptedAutoSave = useRef(false);
+  const retryTimeoutRef = useRef<number | null>(null);
+  const retryAttemptRef = useRef(0);
+
+  const clearScheduledRetry = useCallback(() => {
+    if (retryTimeoutRef.current !== null) {
+      window.clearTimeout(retryTimeoutRef.current);
+      retryTimeoutRef.current = null;
+    }
+  }, []);
 
   const promoteDraft = useCallback(async () => {
     if (!meal.draftId || !onPromoteDraft) {
       return;
     }
 
+    clearScheduledRetry();
     setPromoting(true);
     setPromoteError(null);
+    setCanRetryManually(false);
 
     try {
       await onPromoteDraft(meal.draftId, { isEstimated: true });
+      retryAttemptRef.current = 0;
     } catch (error) {
       console.error("Failed to save meal draft", error);
-      setPromoteError("We couldn’t save this meal automatically. Please try again.");
+      retryAttemptRef.current += 1;
+
+      const maxAutoRetries = 3;
+
+      if (retryAttemptRef.current <= maxAutoRetries) {
+        setPromoteError("We couldn’t save this meal automatically. Retrying…");
+
+        const delay = Math.min(3000 * retryAttemptRef.current, 15000);
+        retryTimeoutRef.current = window.setTimeout(() => {
+          void promoteDraft();
+        }, delay);
+      } else {
+        setPromoteError("We couldn’t save this meal automatically. Please try again.");
+        setCanRetryManually(true);
+      }
     } finally {
       setPromoting(false);
     }
-  }, [meal.draftId, onPromoteDraft]);
+  }, [clearScheduledRetry, meal.draftId, onPromoteDraft]);
 
   useEffect(() => {
     if (hasAttemptedAutoSave.current || !meal.draftId || !onPromoteDraft) {
-      return;
+      return () => {
+        clearScheduledRetry();
+      };
     }
 
     hasAttemptedAutoSave.current = true;
+    retryAttemptRef.current = 0;
     void promoteDraft();
-  }, [meal.draftId, onPromoteDraft, promoteDraft]);
+
+    return () => {
+      clearScheduledRetry();
+    };
+  }, [clearScheduledRetry, meal.draftId, onPromoteDraft, promoteDraft]);
 
   const handleRetry = async () => {
+    retryAttemptRef.current = 0;
     await promoteDraft();
   };
 
@@ -320,13 +355,15 @@ const ReadyDraftCard = ({ meal, onPromoteDraft }: DraftCardProps) => {
           ) : promoteError ? (
             <>
               <p className="text-xs text-red-600">{promoteError}</p>
-              <button
-                type="button"
-                onClick={handleRetry}
-                className="inline-flex items-center gap-2 rounded-full border border-red-200 bg-white px-4 py-2 text-xs font-semibold text-red-700 transition hover:bg-red-50"
-              >
-                Try again
-              </button>
+              {canRetryManually ? (
+                <button
+                  type="button"
+                  onClick={handleRetry}
+                  className="inline-flex items-center gap-2 rounded-full border border-red-200 bg-white px-4 py-2 text-xs font-semibold text-red-700 transition hover:bg-red-50"
+                >
+                  Try again
+                </button>
+              ) : null}
             </>
           ) : (
             <p className="text-xs text-slate-500">
