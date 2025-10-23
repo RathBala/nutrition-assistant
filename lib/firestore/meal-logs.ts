@@ -10,7 +10,24 @@ import {
 
 import { getFirebaseFirestore } from "@/lib/firebase/firestore";
 import type { MealImageUploadResult } from "@/lib/firebase/storage";
-import type { MealDraftAnalysis } from "./meal-drafts";
+
+export type MealAnalysisItem = {
+  name: string;
+  quantity: number;
+  unit: string;
+};
+
+export type MealAnalysis = {
+  calories: number;
+  macros: {
+    protein: number;
+    carbs: number;
+    fat: number;
+  };
+  items: MealAnalysisItem[];
+};
+
+export type MealAnalysisStatus = "pending" | "processing" | "complete" | "error";
 
 export type MealLogSlot = {
   id: string;
@@ -33,10 +50,14 @@ export type MealLogDocument = {
   sourceFileName: string | null;
   createdAt: Timestamp | ReturnType<typeof serverTimestamp>;
   updatedAt: Timestamp | ReturnType<typeof serverTimestamp>;
-  analysis: MealDraftAnalysis | null;
-  isEstimated: boolean;
-  sourceDraftId: string | null;
-  promotedAt: Timestamp | ReturnType<typeof serverTimestamp>;
+  analysis: MealAnalysis | null;
+  analysisStatus: MealAnalysisStatus;
+  analysisStartedAt?: Timestamp | ReturnType<typeof serverTimestamp> | null;
+  analysisCompletedAt?: Timestamp | ReturnType<typeof serverTimestamp> | null;
+  analysisError?: {
+    code: string;
+    message: string;
+  } | null;
 };
 
 const mealLogConverter: FirestoreDataConverter<MealLogDocument> = {
@@ -70,9 +91,10 @@ export const logMealEntry = async (
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
     analysis: null,
-    isEstimated: false,
-    sourceDraftId: null,
-    promotedAt: serverTimestamp(),
+    analysisStatus: "pending",
+    analysisStartedAt: null,
+    analysisCompletedAt: null,
+    analysisError: null,
   };
 
   return addDoc(collectionRef, payload);
