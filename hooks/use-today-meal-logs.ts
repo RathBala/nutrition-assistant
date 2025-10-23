@@ -11,8 +11,11 @@ import {
 } from "firebase/firestore";
 
 import { getFirebaseFirestore } from "@/lib/firebase/firestore";
-import { getMealLogsCollection } from "@/lib/firestore/meal-logs";
-import type { MealDraftAnalysis } from "@/lib/firestore/meal-drafts";
+import {
+  getMealLogsCollection,
+  type MealAnalysis,
+  type MealAnalysisStatus,
+} from "@/lib/firestore/meal-logs";
 
 const LOAD_ERROR_MESSAGE = "We couldn’t load today’s meals. Please try again.";
 
@@ -24,9 +27,10 @@ type TodayMealLog = {
   loggedAt: Date | null;
   imageUrl: string | null;
   sourceFileName: string | null;
-  analysis: MealDraftAnalysis | null;
-  isEstimated: boolean;
-  sourceDraftId: string | null;
+  analysis: MealAnalysis | null;
+  analysisStatus: MealAnalysisStatus;
+  analysisErrorCode: string | null;
+  analysisErrorMessage: string | null;
 };
 
 type UseTodayMealLogsResult = {
@@ -96,9 +100,10 @@ export const useTodayMealLogs = (userId: string | null | undefined): UseTodayMea
             loggedAt: createdAt,
             imageUrl,
             sourceFileName: data.sourceFileName ?? null,
-            analysis: (data.analysis as MealDraftAnalysis | null | undefined) ?? null,
-            isEstimated: Boolean(data.isEstimated),
-            sourceDraftId: data.sourceDraftId ?? null,
+            analysis: (data.analysis as MealAnalysis | null | undefined) ?? null,
+            analysisStatus: (data.analysisStatus as MealAnalysisStatus | undefined) ?? "pending",
+            analysisErrorCode: data.analysisError?.code ?? null,
+            analysisErrorMessage: data.analysisError?.message ?? null,
           };
         });
 
