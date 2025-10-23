@@ -25,8 +25,6 @@ import { useMealSlots } from "@/hooks/use-meal-slots";
 import { logMealEntry } from "@/lib/firestore/meal-logs";
 import { TodayMealsList, type TodayMealEntry } from "@/components/today-meals-list";
 import { useTodayMealLogs } from "@/hooks/use-today-meal-logs";
-import { useMealDrafts } from "@/hooks/use-meal-drafts";
-import { createMealDraft, retryMealDraftAnalysis } from "@/lib/firestore/meal-drafts";
 
 const todayMacros: MacroBreakdown = {
   calories: 1480,
@@ -61,13 +59,6 @@ const dailyTargets: DailyTarget[] = [
 ];
 
 const SAVE_MEAL_ERROR_MESSAGE = "We couldn’t save your meal. Please try again.";
-
-const DEFAULT_DRAFT_AUTOSAVE_MINUTES = Number(
-  process.env.NEXT_PUBLIC_DRAFT_AUTOSAVE_MINUTES ?? "5",
-);
-const DRAFT_AUTOSAVE_MINUTES = Number.isFinite(DEFAULT_DRAFT_AUTOSAVE_MINUTES)
-  ? Math.max(1, DEFAULT_DRAFT_AUTOSAVE_MINUTES)
-  : 5;
 
 type PendingMealDetails = {
   name: string;
@@ -138,42 +129,19 @@ function Dashboard({
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const { slots: mealSlots, loading: mealSlotsLoading } = useMealSlots(user.uid);
   const {
-    drafts: mealDrafts,
-    loading: mealDraftsLoading,
-    error: mealDraftsError,
-    refresh: refreshMealDrafts,
-  } = useMealDrafts(user.uid);
-  const {
     meals: mealLogs,
     loading: mealLogsLoading,
     error: mealLogsError,
     refresh: refreshMealLogs,
   } = useTodayMealLogs(user.uid);
 
-  const todayMealsError = mealDraftsError ?? mealLogsError;
-  const todayMealsLoading = mealDraftsLoading || mealLogsLoading;
+  const todayMealsError = mealLogsError;
+  const todayMealsLoading = mealLogsLoading;
 
   const todayMeals: TodayMealEntry[] = useMemo(() => {
-    const draftEntries: TodayMealEntry[] = mealDrafts.map((draft) => ({
-      id: `draft-${draft.id}`,
-      kind: "draft",
-      status: draft.status,
-      name: draft.name,
-      slotId: draft.slotId,
-      slotName: draft.slotName,
-      loggedAt: draft.createdAt,
-      imageUrl: draft.imageUrl,
-      sourceFileName: draft.sourceFileName,
-      analysis: draft.analysis,
-      isEstimated: false,
-      draftId: draft.id,
-      autoPromoteAt: draft.autoPromoteAt,
-    }));
-
     const logEntries: TodayMealEntry[] = mealLogs.map((meal) => ({
       id: `log-${meal.id}`,
-      kind: "log",
-      status: "logged" as const,
+      status: meal.analysisStatus,
       name: meal.name,
       slotId: meal.slotId,
       slotName: meal.slotName,
@@ -181,21 +149,16 @@ function Dashboard({
       imageUrl: meal.imageUrl,
       sourceFileName: meal.sourceFileName,
       analysis: meal.analysis,
-      isEstimated: meal.isEstimated,
-      draftId: meal.sourceDraftId,
-      autoPromoteAt: null,
+      analysisErrorCode: meal.analysisErrorCode,
+      analysisErrorMessage: meal.analysisErrorMessage,
     }));
 
-    const combined = [...draftEntries, ...logEntries];
-
     console.log("[Dashboard] Recomputed todayMeals", {
-      draftCount: draftEntries.length,
-      logCount: logEntries.length,
-      combinedCount: combined.length,
-      statuses: combined.map((meal) => ({ id: meal.id, kind: meal.kind, status: meal.status })),
+      count: logEntries.length,
+      statuses: logEntries.map((meal) => ({ id: meal.id, status: meal.status })),
     });
 
-    return combined.sort((a, b) => {
+    return logEntries.sort((a, b) => {
       const timeA = a.loggedAt ? a.loggedAt.getTime() : 0;
       const timeB = b.loggedAt ? b.loggedAt.getTime() : 0;
 
@@ -205,12 +168,11 @@ function Dashboard({
 
       return a.id.localeCompare(b.id);
     });
-  }, [mealDrafts, mealLogs]);
+  }, [mealLogs]);
 
   const refreshTodayMeals = useCallback(() => {
-    refreshMealDrafts();
     refreshMealLogs();
-  }, [refreshMealDrafts, refreshMealLogs]);
+  }, [refreshMealLogs]);
 
   const defaultMealSlotId = useMemo(() => {
     if (mealSlots.length === 0) {
@@ -460,42 +422,22 @@ function Dashboard({
       setFeedbackErrorTitle(null);
 
       try {
-        if (uploadResult) {
-          const draftRef = await createMealDraft(user.uid, {
-            name: details.name,
-            slot: { id: details.slotId, name: details.slotName },
-            image: uploadResult,
-            sourceFileName: details.sourceFileName ?? null,
-            autoPromoteDelayMinutes: DRAFT_AUTOSAVE_MINUTES,
-          });
+        const savedDocRef = await logMealEntry(user.uid, {
+          name: details.name,
+          slot: { id: details.slotId, name: details.slotName },
+          image: uploadResult,
+          sourceFileName: details.sourceFileName ?? null,
+        });
 
-          if (!isMountedRef.current) {
-            return;
-          }
-
-          clearPendingMealState();
-          setLastUploadResult(uploadResult);
-          setShowSuccess(true);
-          refreshTodayMeals();
-          console.info("Meal draft created", draftRef.id);
-        } else {
-          const savedDocRef = await logMealEntry(user.uid, {
-            name: details.name,
-            slot: { id: details.slotId, name: details.slotName },
-            image: null,
-            sourceFileName: details.sourceFileName ?? null,
-          });
-
-          if (!isMountedRef.current) {
-            return;
-          }
-
-          clearPendingMealState();
-          setLastUploadResult(null);
-          setShowSuccess(true);
-          refreshTodayMeals();
-          console.info("Meal entry saved", savedDocRef.id);
+        if (!isMountedRef.current) {
+          return;
         }
+
+        clearPendingMealState();
+        setLastUploadResult(uploadResult);
+        setShowSuccess(true);
+        refreshTodayMeals();
+        console.info("Meal entry saved", savedDocRef.id);
       } catch (error) {
         console.error("Failed to save meal entry", error);
 
@@ -588,46 +530,6 @@ function Dashboard({
         });
     },
     [attemptSaveMeal, describeUploadError, revokePreviews, user.uid],
-  );
-
-  const handleRetryDraftAnalysis = useCallback(
-    async (draftId: string) => {
-      await retryMealDraftAnalysis(user.uid, draftId);
-    },
-    [user.uid],
-  );
-
-  const handlePromoteDraft = useCallback(
-    async (draftId: string, { isEstimated }: { isEstimated: boolean }) => {
-      const idToken = await user.getIdToken();
-
-      const response = await fetch(`/api/meal-drafts/${draftId}/promote`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${idToken}`,
-        },
-        body: JSON.stringify({ isEstimated }),
-      });
-
-      if (!response.ok) {
-        let message = "We couldn’t save this meal.";
-
-        try {
-          const data = await response.json();
-          if (data?.error && typeof data.error === "string") {
-            message = data.error;
-          }
-        } catch (parseError) {
-          console.error("Failed to parse promote error response", parseError);
-        }
-
-        throw new Error(message);
-      }
-
-      refreshTodayMeals();
-    },
-    [refreshTodayMeals, user],
   );
 
   const handleSubmitMealFromModal = useCallback(
@@ -771,8 +673,6 @@ function Dashboard({
             error={todayMealsError}
             onRetry={refreshTodayMeals}
             onLogMeal={handleOpenMealDetails}
-            onRetryDraftAnalysis={handleRetryDraftAnalysis}
-            onPromoteDraft={handlePromoteDraft}
           />
         </div>
         <div className="space-y-5">
