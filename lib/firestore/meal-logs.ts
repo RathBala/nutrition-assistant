@@ -10,7 +10,7 @@ import {
 
 import { getFirebaseFirestore } from "@/lib/firebase/firestore";
 import type { MealImageUploadResult } from "@/lib/firebase/storage";
-import type { MealDraftAnalysis } from "./meal-drafts";
+import type { MealAnalysis } from "@/lib/types/meal-analysis";
 
 export type MealLogSlot = {
   id: string;
@@ -33,10 +33,8 @@ export type MealLogDocument = {
   sourceFileName: string | null;
   createdAt: Timestamp | ReturnType<typeof serverTimestamp>;
   updatedAt: Timestamp | ReturnType<typeof serverTimestamp>;
-  analysis: MealDraftAnalysis | null;
+  analysis: MealAnalysis | null;
   isEstimated: boolean;
-  sourceDraftId: string | null;
-  promotedAt: Timestamp | ReturnType<typeof serverTimestamp>;
 };
 
 const mealLogConverter: FirestoreDataConverter<MealLogDocument> = {
@@ -70,9 +68,7 @@ export const logMealEntry = async (
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
     analysis: null,
-    isEstimated: false,
-    sourceDraftId: null,
-    promotedAt: serverTimestamp(),
+    isEstimated: Boolean(input.image ?? null),
   };
 
   return addDoc(collectionRef, payload);

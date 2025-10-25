@@ -12,7 +12,7 @@ import {
 
 import { getFirebaseFirestore } from "@/lib/firebase/firestore";
 import { getMealLogsCollection } from "@/lib/firestore/meal-logs";
-import type { MealDraftAnalysis } from "@/lib/firestore/meal-drafts";
+import type { MealAnalysis } from "@/lib/types/meal-analysis";
 
 const LOAD_ERROR_MESSAGE = "We couldn’t load today’s meals. Please try again.";
 
@@ -24,9 +24,8 @@ type TodayMealLog = {
   loggedAt: Date | null;
   imageUrl: string | null;
   sourceFileName: string | null;
-  analysis: MealDraftAnalysis | null;
+  analysis: MealAnalysis | null;
   isEstimated: boolean;
-  sourceDraftId: string | null;
 };
 
 type UseTodayMealLogsResult = {
@@ -96,9 +95,8 @@ export const useTodayMealLogs = (userId: string | null | undefined): UseTodayMea
             loggedAt: createdAt,
             imageUrl,
             sourceFileName: data.sourceFileName ?? null,
-            analysis: (data.analysis as MealDraftAnalysis | null | undefined) ?? null,
+            analysis: (data.analysis as MealAnalysis | null | undefined) ?? null,
             isEstimated: Boolean(data.isEstimated),
-            sourceDraftId: data.sourceDraftId ?? null,
           };
         });
 
