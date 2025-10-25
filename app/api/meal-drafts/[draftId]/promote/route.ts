@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { FieldValue } from "firebase-admin/firestore";
+import * as admin from "firebase-admin";
 
 import { getFirebaseAdminAuth, getFirebaseAdminFirestore } from "@/lib/server/firebase-admin";
 
@@ -135,12 +135,12 @@ export const POST = async (
         },
         image: draftData.image ?? null,
         sourceFileName: draftData.sourceFileName ?? null,
-        createdAt: draftData.createdAt ?? FieldValue.serverTimestamp(),
-        updatedAt: FieldValue.serverTimestamp(),
+        createdAt: draftData.createdAt ?? admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         analysis: draftData.analysis ?? null,
         isEstimated: payload.isEstimated,
         sourceDraftId: draftId,
-        promotedAt: FieldValue.serverTimestamp(),
+        promotedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
 
       transaction.delete(draftRef);
