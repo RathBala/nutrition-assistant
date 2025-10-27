@@ -1,7 +1,7 @@
 import * as admin from "firebase-admin";
 import * as functions from "firebase-functions";
 
-import { runStubMealAnalysis } from "./analysis/stub";
+import { analysisSecrets, runOpenAIMealAnalysis } from "./analysis/openai";
 
 const fieldValue = admin.firestore.FieldValue;
 
@@ -14,9 +14,11 @@ const buildErrorPayload = (code: string, message: string) => ({
   message,
 });
 
-export const mealLogsOnCreate = functions.firestore
+export const mealLogsOnCreate = functions
+  .runWith({ secrets: analysisSecrets })
+  .firestore
   .document("users/{uid}/mealLogs/{logId}")
-  .onCreate(async (snapshot, context) => {
+  .onCreate(async (snapshot: admin.firestore.DocumentSnapshot, context: functions.EventContext) => {
     functions.logger.info("Meal log created; running analysis", {
       uid: context.params.uid,
       logId: context.params.logId,
@@ -48,7 +50,7 @@ export const mealLogsOnCreate = functions.firestore
         throw new Error("missing-input");
       }
 
-      const analysis = await runStubMealAnalysis({ imageBuffer, mealName });
+      const analysis = await runOpenAIMealAnalysis({ imageBuffer, mealName });
 
       await snapshot.ref.update({
         analysis,
